@@ -53,55 +53,53 @@ export const searchBusinesses = async (
 
   const ai = new GoogleGenAI({ apiKey });
   
-  onProgress("Initializing Gemini Maps Session...");
+  onProgress("Initializing Multi-Tool Session...");
 
-  // We use gemini-2.5-flash for Maps Grounding
+  // We use gemini-2.5-flash because it supports BOTH Maps and Search grounding simultaneously.
   const modelId = 'gemini-2.5-flash';
   
-  // Revised prompt: Chain of Thought + strict field mapping
+  // LOGIC UPDATE: We now instruct the model to use Search as a fallback if Maps is missing the website.
   const prompt = `
-    Goal: Find "${keyword}" businesses in "${location}" using Google Maps.
+    Find "${keyword}" businesses in "${location}".
     
-    STEP 1: Search Google Maps for the businesses.
-    STEP 2: For EACH business found, inspect the data details specifically for the "website" or "websiteUri" field.
+    EXECUTION LOGIC:
+    1. Use **Google Maps** to find the business list, ratings, and addresses.
+    2. **CRITICAL WEBSITE CHECK**:
+       - Check the Maps data for a 'website' or 'websiteUri'.
+       - IF the website is missing in the Maps data, you MUST use **Google Search** immediately to find the official website for that business.
+       - Do not return 'null' for the website unless it truly does not exist after checking both Maps and Search.
     
-    *** DATA EXTRACTION RULES ***
-    - **WEBSITE**: You must extract the URL found in the 'websiteUri' or 'website' field of the Maps result. 
-      - Example: If the map result says "alphasewerandplumbing.com", output "https://alphasewerandplumbing.com".
-      - If the website field contains a valid domain, YOU MUST INCLUDE IT.
-      - Do NOT return 'null' if a URL exists in the map data.
-      - Do NOT return 'google.com/maps/...' links as the website.
-    
-    STEP 3: Return a JSON array of the businesses.
+    RETURN FORMAT:
+    Return a STRICT JSON array (no markdown text outside JSON):
     
     [
       {
         "name": "Business Name",
         "address": "Full Address",
         "phone": "Phone Number",
-        "website": "https://website.com" (OR null),
+        "website": "https://verified-url.com",
         "rating": 4.5,
         "user_ratings_total": 120,
         "category": "Primary Category"
       }
     ]
     
-    Output ONLY the JSON. No conversational text.
-    Ensure you find at least 10-15 results if possible.
+    Find at least 15 results. Prioritize businesses that look like good leads (e.g. might have lower reviews or older sites), but ensure data accuracy.
   `;
 
   try {
-    onProgress("Querying Google Maps via Gemini...");
+    onProgress("Querying Google Maps & Search Indexes...");
     
     const response = await ai.models.generateContent({
       model: modelId,
       contents: prompt,
       config: {
-        tools: [{ googleMaps: {} }],
+        // LOGIC REFINEMENT: Enable BOTH tools to fix the "missing website" false negative.
+        tools: [{ googleMaps: {} }, { googleSearch: {} }],
       },
     });
 
-    onProgress("Processing results...");
+    onProgress("Processing intelligence...");
 
     const text = response.text || "";
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
