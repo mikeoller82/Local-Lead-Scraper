@@ -11,8 +11,9 @@ import { validateWebsiteUrl } from "../utils/validation";
  */
 const parseBusinessResponse = (text: string, chunks: any[]): Partial<BusinessLead>[] => {
   try {
-    // Attempt to find a JSON block in the text
-    const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/) || text.match(/\[\s*\{[\s\S]*\}\s*\]/);
+    // Attempt to find a JSON block in the text. 
+    // Regex handles ```json followed by optional newline, content, and ```
+    const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/\[\s*\{[\s\S]*\}\s*\]/);
     
     if (jsonMatch) {
       const jsonStr = jsonMatch[1] || jsonMatch[0];
@@ -53,27 +54,35 @@ export const searchBusinesses = async (
   // We use gemini-2.5-flash for Maps Grounding
   const modelId = 'gemini-2.5-flash';
   
+  // Revised prompt to be extremely explicit about extracting the website field
   const prompt = `
-    Search for "${keyword}" in "${location}" using Google Maps.
+    Find "${keyword}" businesses in "${location}" using Google Maps.
     
-    I need you to return a list of at least 10-15 businesses found.
-    For each business, I need the following details in a strictly formatted JSON array:
+    *** URGENT DATA EXTRACTION RULES ***
+    1. **WEBSITE URL (Priority #1)**: 
+       - You MUST check the Google Maps "Website" button/field for EVERY result.
+       - If a domain is listed (e.g., "alphasewerandplumbing.com"), you **MUST** extract it.
+       - **Do NOT return null** if the website is visible on the listing.
+       - Ignore "google.com" or "business.site" links; find the actual domain if possible.
+    
+    2. **Details**: Extract Name, Address, Phone, Rating, and Review Count.
+    
+    Return a strictly formatted JSON array of at least 15 businesses:
     
     [
       {
         "name": "Business Name",
         "address": "Full Address",
         "phone": "Phone Number",
-        "website": "Website URL" (or null if none),
-        "rating": 4.5 (number),
-        "user_ratings_total": 120 (number),
+        "website": "https://actual-domain.com" (OR null only if strictly missing),
+        "rating": 4.5,
+        "user_ratings_total": 120,
         "category": "Primary Category"
       }
     ]
     
-    Do not add any markdown formatting outside the JSON block.
-    If you find fewer than 5, try to find the most relevant ones.
-    IMPORTANT: Provide real data from the Maps tool.
+    Do not add markdown formatting outside the JSON. 
+    ACCURACY CHECK: Do not say the website is missing if it is on the Maps card.
   `;
 
   try {
@@ -153,7 +162,11 @@ export const deepQualifyLead = async (apiKey: string, lead: BusinessLead): Promi
     Analyze the online presence for the business "${lead.name}" located at "${lead.address}".
     
     Task:
-    1. Search for their official website. If provided as "${lead.website}", verify it. If missing, try to find it.
+    1. **WEBSITE RECOVERY**: 
+       - Current Website Status: ${lead.website ? lead.website : "MISSING"}.
+       - If "MISSING", perform a targeted Google Search for "${lead.name} ${lead.city} official website".
+       - If you find the official site, return it.
+       - If "${lead.website}" is provided, verify it is their actual site.
     2. Visual & Structural Quality: Check if the website appears modern or outdated. Assess its design quality as "Poor", "Average", or "Good".
     3. Content Freshness: Look for copyright dates (e.g. 2023 vs 2015) or recent blog posts. Is the content "Fresh" or "Outdated"?
     4. Technical Issues: Look for mentions of the site being "down", "hacked", or "not secure". 
@@ -162,7 +175,7 @@ export const deepQualifyLead = async (apiKey: string, lead: BusinessLead): Promi
     
     Return a JSON object with:
     {
-      "found_website_url": "The confirmed website URL if found/verified, else null",
+      "found_website_url": "The confirmed website URL (found via search or verified)",
       "website_status": "Active" | "Inactive" | "Missing",
       "visual_quality_score": "Poor" | "Average" | "Good",
       "content_status": "Outdated" | "Fresh" | "Unknown",
