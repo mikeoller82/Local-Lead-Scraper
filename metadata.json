@@ -1,0 +1,7 @@
+{
+  "name": "Local Lead Scraper & Qualifier",
+  "description": "A SaaS-style application to find, qualify, and export local business leads using Google Maps and Search grounding.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
