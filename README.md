@@ -101,5 +101,4 @@ This project is open source under the MIT License — you can use, modify, and d
 📫 Support
 If you have questions or feedback, open an issue or drop a comment — happy to help!
 
-yaml
-Copy code
+
