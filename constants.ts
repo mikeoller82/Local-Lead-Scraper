@@ -12,7 +12,8 @@ export const CATEGORIES = [
   "Moving Company",
   "Garage Door Service",
   "Window Installation",
-  "Solar Installer"
+  "Solar Installer",
+  "Handyman"
 ];
 
 export const MOCK_LEADS = []; // We will use live API, but keep this if needed for UI testing
