@@ -92,7 +92,7 @@ export const searchBusinesses = async (
   onProgress("Initializing Multi-Tool Session...");
 
   // We use gemini-2.5-flash because it supports BOTH Maps and Search grounding simultaneously.
-  const modelId = 'gemini-3-flash-preview';
+  const modelId = 'gemini-2.5-flash';
   
   // LOGIC UPDATE: We now instruct the model to use Search as a fallback if Maps is missing the website.
   const prompt = `
