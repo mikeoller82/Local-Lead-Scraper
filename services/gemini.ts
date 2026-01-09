@@ -7,6 +7,38 @@ import { validateWebsiteUrl } from "../utils/validation";
 // We create a new instance per request using the user-provided key.
 
 /**
+ * Helper to extract City, State, Zip from a full address string if the JSON fields are missing.
+ * Tries to parse standard US address formats: "123 Main St, City, ST 12345"
+ */
+const parseAddressString = (fullAddress: string): { city: string, state: string, zip: string } => {
+  if (!fullAddress) return { city: "", state: "", zip: "" };
+  
+  // Regex to look for "City, ST Zip" or "City, ST" at the end of the string
+  // Matches: comma, space, City name (words), comma, space, State (2 chars), space, Zip (5+4 digits)
+  const zipMatch = fullAddress.match(/,\s*([a-zA-Z\s\.]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/);
+  
+  if (zipMatch) {
+    return {
+      city: zipMatch[1].trim(),
+      state: zipMatch[2].trim(),
+      zip: zipMatch[3].trim()
+    };
+  }
+
+  // Fallback for just "City, ST" if zip is missing
+  const stateMatch = fullAddress.match(/,\s*([a-zA-Z\s\.]+),\s*([A-Z]{2})$/);
+  if (stateMatch) {
+    return {
+      city: stateMatch[1].trim(),
+      state: stateMatch[2].trim(),
+      zip: ""
+    };
+  }
+
+  return { city: "", state: "", zip: "" };
+};
+
+/**
  * Parses the raw text response from Gemini into structured Business objects.
  */
 const parseBusinessResponse = (text: string, chunks: any[]): Partial<BusinessLead>[] => {
@@ -25,12 +57,16 @@ const parseBusinessResponse = (text: string, chunks: any[]): Partial<BusinessLea
         return parsed.map((item: any) => {
            return {
              name: item.name,
-             address: item.address,
+             address: item.full_address || item.address,
              phone: item.phone,
              website: item.website,
              rating: item.rating || 0,
              reviewCount: item.user_ratings_total || item.reviewCount || 0,
              category: item.type || item.category,
+             // Explicitly capture these fields if returned
+             city: item.city,
+             state: item.state,
+             zip: item.zip_code || item.zip
            };
         });
       }
@@ -60,14 +96,17 @@ export const searchBusinesses = async (
   
   // LOGIC UPDATE: We now instruct the model to use Search as a fallback if Maps is missing the website.
   const prompt = `
-    Find "${keyword}" businesses in "${location}".
+    Find "${keyword}" businesses in or near "${location}".
     
     EXECUTION LOGIC:
     1. Use **Google Maps** to find the business list, ratings, and addresses.
-    2. **CRITICAL WEBSITE CHECK**:
+    2. **CRITICAL LOCATION ACCURACY**:
+       - You MUST extract the ACTUAL City, State, and Zip Code from the specific address returned by Google Maps for EACH business.
+       - **DO NOT** use the user's search location (e.g., "${location}") as the default for the business location. 
+       - If the user searches "St. Louis" but the business is in "Clayton, MO", list "Clayton" as the city.
+    3. **WEBSITE CHECK**:
        - Check the Maps data for a 'website' or 'websiteUri'.
-       - IF the website is missing in the Maps data, you MUST use **Google Search** immediately to find the official website for that business.
-       - Do not return 'null' for the website unless it truly does not exist after checking both Maps and Search.
+       - IF the website is missing in the Maps data, use **Google Search** to find the official website.
     
     RETURN FORMAT:
     Return a STRICT JSON array (no markdown text outside JSON):
@@ -75,7 +114,10 @@ export const searchBusinesses = async (
     [
       {
         "name": "Business Name",
-        "address": "Full Address",
+        "full_address": "123 Main St, City, ST 12345",
+        "city": "City Name (Extracted from address)",
+        "state": "ST (Extracted from address)",
+        "zip_code": "12345 (Extracted from address)",
         "phone": "Phone Number",
         "website": "https://verified-url.com",
         "rating": 4.5,
@@ -84,7 +126,7 @@ export const searchBusinesses = async (
       }
     ]
     
-    Find at least 15 results. Prioritize businesses that look like good leads (e.g. might have lower reviews or older sites), but ensure data accuracy.
+    Find at least 15 results. Prioritize businesses that look like good leads (e.g. might have lower reviews or older sites).
   `;
 
   try {
@@ -117,183 +159,102 @@ export const searchBusinesses = async (
         c.maps?.title && lead.name && c.maps.title.toLowerCase().includes(lead.name.toLowerCase())
       );
 
-      const finalLead: BusinessLead = {
+      // Determine address components
+      // PRIORITY 1: Use what the AI extracted into the JSON
+      let finalCity = lead.city;
+      let finalState = lead.state;
+      let finalZip = lead.zip;
+
+      // PRIORITY 2: If JSON is missing specific fields, parse the full_address string
+      if ((!finalCity || !finalState) && lead.address) {
+        const parsed = parseAddressString(lead.address);
+        if (!finalCity && parsed.city) finalCity = parsed.city;
+        if (!finalState && parsed.state) finalState = parsed.state;
+        if (!finalZip && parsed.zip) finalZip = parsed.zip;
+      }
+      
+      // PRIORITY 3: Do NOT fallback to search location for City/State/Zip to avoid hallucinations.
+      // Leave them blank if unknown, so the user knows the data is missing rather than wrong.
+
+      const finalAddress = lead.address || (matchChunk?.maps?.title) || "Address not listed";
+
+      const partialLead: Partial<BusinessLead> = {
+        ...lead,
         id: `lead-${Date.now()}-${index}`,
-        name: lead.name || "Unknown Business",
-        address: lead.address || location,
-        city: location.split(',')[0], // heuristic
-        state: location.split(',')[1]?.trim() || "",
-        phone: lead.phone,
-        website: lead.website || null,
-        rating: lead.rating || 0,
-        reviewCount: lead.reviewCount || 0,
-        category: lead.category || keyword,
-        mapsUri: matchChunk?.maps?.uri || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lead.name + " " + lead.address)}`,
-        
-        // Initial scoring
-        score: 0,
-        tags: [],
-        opportunitySummary: "",
+        address: finalAddress,
+        city: finalCity || "Unknown City",
+        state: finalState || "",
+        zip: finalZip,
+        mapsUri: matchChunk?.maps?.uri || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lead.name} ${lead.address || ''}`)}`,
       };
 
-      const { score, summary } = calculateLeadScore(finalLead);
-      finalLead.score = score;
-      finalLead.opportunitySummary = summary;
-      finalLead.tags = determineTags(finalLead);
+      const tags = determineTags(partialLead);
+      const { score, summary } = calculateLeadScore(partialLead);
 
-      return finalLead;
+      return {
+        ...partialLead,
+        score,
+        tags,
+        opportunitySummary: summary,
+        ghlSyncStatus: 'idle',
+        isGeneratingScript: false
+      } as BusinessLead;
     });
 
-    return processedLeads;
+    onProgress(`Found ${processedLeads.length} leads. Validating websites...`);
 
-  } catch (error) {
+    // Parallel Website Validation
+    const validatedLeads = await Promise.all(processedLeads.map(async (lead) => {
+      if (lead.website) {
+        const isReachable = await validateWebsiteUrl(lead.website);
+        // Recalculate score based on reachability
+        const updatedLead = { ...lead, isWebsiteReachable: isReachable };
+        const { score, summary } = calculateLeadScore(updatedLead);
+        const tags = determineTags(updatedLead);
+        return { ...updatedLead, score, opportunitySummary: summary, tags };
+      }
+      return lead;
+    }));
+
+    return validatedLeads;
+
+  } catch (error: any) {
     console.error("Gemini Search Error:", error);
-    throw new Error("Failed to fetch leads. Please check your API key and try again.");
+    throw new Error(`Search failed: ${error.message}`);
   }
 };
 
 /**
- * Deep qualification using Google Search Grounding.
+ * Performs a "Deep Analysis" by using the AI to infer technical details 
+ * based on search grounding about the business's web presence.
  */
 export const deepQualifyLead = async (apiKey: string, lead: BusinessLead): Promise<Partial<BusinessLead>> => {
-  if (!apiKey) throw new Error("API Key is missing");
-
   const ai = new GoogleGenAI({ apiKey });
-  const modelId = 'gemini-3-flash-preview';
-  
+  const modelId = 'gemini-2.5-flash';
+
   const prompt = `
-    Analyze the online presence for the business "${lead.name}" located at "${lead.address}".
+    Analyze the digital presence of "${lead.name}" located in "${lead.city}, ${lead.state}".
+    Website: ${lead.website || "No website found"}
+
+    Task: Use Google Search to find recent reviews, social media activity, and technical details about their website if it exists.
     
-    Task:
-    1. **WEBSITE RECOVERY**: 
-       - Current recorded website: ${lead.website ? lead.website : "MISSING/NULL"}.
-       - **MANDATORY**: Search specifically for "${lead.name} ${lead.city} official website".
-       - If you find a matching official website (e.g. on the business profile or top search result), RETURN IT, even if the input said missing.
-    
-    2. Analyze the following:
-       - Visual & Structural Quality (Poor/Average/Good)
-       - Content Freshness (Fresh/Outdated)
-       - Technical Issues (Secure/Hacked)
-       - Mobile Friendliness (Yes/No)
-       - Broken Links (Yes/No)
-    
-    Return JSON:
+    Determine the following:
+    1. Mobile Friendliness: (True/False/Unknown) - Is there evidence the site is mobile responsive?
+    2. Page Speed: (Slow/Average/Fast) - Any complaints or indicators of speed?
+    3. Visual Quality: (Poor/Average/Good) - Based on design standards or descriptions.
+    4. SSL Secure: (True/False) - Does the link use HTTPS?
+    5. Content Status: (Outdated/Fresh) - Are there recent posts or updates (2024-2025)?
+    6. Broken Links: (True/False) - Common issue reported?
+
+    Return JSON only:
     {
-      "found_website_url": "The confirmed website URL (found via search or verified)",
-      "website_status": "Active" | "Inactive" | "Missing",
-      "visual_quality_score": "Poor" | "Average" | "Good",
-      "content_status": "Outdated" | "Fresh" | "Unknown",
-      "is_mobile_friendly": true | false,
-      "estimated_speed": "Slow" | "Average" | "Fast",
-      "has_broken_links": true | false,
-      "additional_notes": "Brief summary."
+      "hasMobileFriendlySite": boolean,
+      "pageLoadSpeed": "Slow" | "Average" | "Fast",
+      "visualQualityScore": "Poor" | "Average" | "Good",
+      "sslSecure": boolean,
+      "contentStatus": "Outdated" | "Fresh",
+      "hasBrokenLinks": boolean
     }
-  `;
-
-  const response = await ai.models.generateContent({
-    model: modelId,
-    contents: prompt,
-    config: {
-      tools: [{ googleSearch: {} }],
-      responseMimeType: "application/json"
-    }
-  });
-
-  const jsonStr = response.text;
-  try {
-    const data = JSON.parse(jsonStr);
-    
-    const updates: Partial<BusinessLead> = {};
-    
-    // Logic to prefer the found website if the original was null or different
-    let candidateWebsite = lead.website;
-    if (data.found_website_url && data.found_website_url !== "null") {
-       candidateWebsite = data.found_website_url;
-    }
-    
-    // 1. Validate Reachability
-    const isReachable = await validateWebsiteUrl(candidateWebsite);
-
-    if (isReachable && candidateWebsite) {
-      updates.website = candidateWebsite;
-      updates.isWebsiteReachable = true;
-      updates.sslSecure = candidateWebsite.toLowerCase().startsWith('https');
-    } else {
-      updates.isWebsiteReachable = false;
-      updates.sslSecure = false;
-      if (data.website_status === 'Missing' && !candidateWebsite) {
-        updates.website = null;
-      }
-    }
-
-    updates.hasMobileFriendlySite = data.is_mobile_friendly;
-    updates.pageLoadSpeed = data.estimated_speed;
-    updates.visualQualityScore = data.visual_quality_score;
-    updates.contentStatus = data.content_status;
-    updates.hasBrokenLinks = data.has_broken_links;
-    
-    updates.opportunitySummary = lead.opportunitySummary + ` [Analysis: ${data.additional_notes}]`;
-    
-    const tempLeadForScoring = { ...lead, ...updates };
-    const { score, summary } = calculateLeadScore(tempLeadForScoring);
-    const tags = determineTags(tempLeadForScoring);
-
-    updates.score = score;
-    updates.opportunitySummary = summary;
-    updates.tags = tags;
-
-    return updates;
-
-  } catch (e) {
-    console.error("Deep qualify parse error", e);
-    return {};
-  }
-};
-
-/**
- * Generates a personalized cold call script using Research Grounding.
- */
-export const generateColdCallScript = async (apiKey: string, lead: BusinessLead): Promise<string> => {
-  if (!apiKey) throw new Error("API Key is missing");
-
-  const ai = new GoogleGenAI({ apiKey });
-  
-  // Use a smart model that can search and reason
-  const modelId = 'gemini-3-flash-preview';
-
-  const prompt = `
-    You are an elite Sales Development Representative (SDR) with a proven track record of booking demos.
-    
-    Target Prospect:
-    Business: ${lead.name}
-    City: ${lead.city}, ${lead.state}
-    Industry: ${lead.category}
-    Website: ${lead.website || "Unknown"}
-    Pain Points: ${lead.tags.join(', ')}
-    Opportunity: ${lead.opportunitySummary}
-
-    GOAL: Write a high-converting Cold Call Script designed to book a **15-minute Zoom/Screen Share Demo**.
-
-    INSTRUCTIONS:
-    1. **RESEARCH PHASE**: Use Google Search to find:
-       - The Owner or Founder's name.
-       - A recent event, positive review, or news item to use as a "Pattern Interrupt" (warm opener).
-    
-    2. **SCRIPT STRUCTURE (High Closing Rate)**:
-       - **The Opener**: "Hey [Name], this is [Your Name], calling from [City]. I know I'm calling out of the blue..." (Permission/Pattern Interrupt).
-       - **The Warm Up**: "I was just reading about [Research Item]..." (Disarms them).
-       - **The Pivot (The Gap)**: "The reason I'm calling is I noticed [Specific Pain Point from tags/summary] and I know that usually hurts [Revenue/Rankings]."
-       - **The Solution (Teaser)**: "We built a system that fixes exactly this."
-       - **The Close (Zoom Call)**: "I'd love to share my screen for 10 minutes on Zoom and show you how we fix it. Are you open to that next Tuesday?"
-
-    3. **OBJECTION HANDLING**:
-       - Anticipate the top 3 most likely objections specific to this business (e.g. "Just email me", "We are happy with current provider", "Too busy").
-       - Provide a specific, proven rebuttal for each that pivots back to booking the Zoom call. Use tactics like "The Push Pull", "Feel Felt Found", or "Level Shift".
-
-    OUTPUT FORMAT:
-    - **SECTION 1: Intelligence**: Bullet points of Owner Name (if found) and the Research Hook found.
-    - **SECTION 2: The Script**: The exact verbatim script, using Markdown for emphasis on tonality.
-    - **SECTION 3: Objection Handling**: A structured list of common objections and the exact response script to keep the conversation alive and close the demo.
   `;
 
   try {
@@ -301,13 +262,69 @@ export const generateColdCallScript = async (apiKey: string, lead: BusinessLead)
       model: modelId,
       contents: prompt,
       config: {
-        tools: [{ googleSearch: {} }], // Grounding enabled
-      },
+        tools: [{ googleSearch: {} }],
+      }
     });
 
+    const text = response.text || "";
+    const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/\{[\s\S]*\}/);
+    
+    if (jsonMatch) {
+       const data = JSON.parse(jsonMatch[1] || jsonMatch[0]);
+       
+       // Update logic: Recalculate score with new deep data
+       const updatedLeadStub = { ...lead, ...data };
+       const { score, summary } = calculateLeadScore(updatedLeadStub);
+       const tags = determineTags(updatedLeadStub);
+
+       return {
+         ...data,
+         score, // Update score
+         opportunitySummary: summary, // Update summary
+         tags // Update tags
+       };
+    }
+    return {};
+  } catch (e) {
+    console.error("Deep analysis failed", e);
+    return {};
+  }
+};
+
+/**
+ * Generates a personalized cold call script using AI.
+ */
+export const generateColdCallScript = async (apiKey: string, lead: BusinessLead): Promise<string> => {
+  const ai = new GoogleGenAI({ apiKey });
+  const modelId = 'gemini-2.5-flash'; // Good for creative writing
+
+  const prompt = `
+    Write a high-converting cold call script for a digital marketing agency calling "${lead.name}".
+    
+    Lead Info:
+    - Industry: ${lead.category}
+    - Location: ${lead.city}, ${lead.state}
+    - Score: ${lead.score}/100
+    - Weaknesses identified: ${lead.opportunitySummary}
+    - Tags: ${lead.tags.join(', ')}
+
+    The goal: Book a 15-minute demo to fix their online presence.
+    
+    Style: Professional, empathetic, direct. Avoid cheesy sales gimmicks.
+    Structure:
+    1. Opener (Pattern interrupt)
+    2. Value Prop (Mention specific weakness found)
+    3. Call to Action (Soft close)
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: modelId,
+      contents: prompt,
+    });
     return response.text || "Could not generate script.";
   } catch (e) {
     console.error("Script generation failed", e);
-    return "Error generating script. Please try again.";
+    return "Error generating script.";
   }
 };
