@@ -121,31 +121,89 @@ export const determineTags = (lead: Partial<BusinessLead>): LeadTag[] => {
 };
 
 export const exportToCSV = (leads: BusinessLead[]) => {
+  // Enhanced headers to match GHL/CRM import fields requested
   const headers = [
-    "Business Name", "Score", "Category", "City", "State", 
-    "Phone", "Website", "Reviews", "Rating", "Google Maps URL", 
-    "SSL Secure", "Mobile Friendly", "Speed", "Reachability", "Broken Links", "Tags", "Opportunity Notes"
+    "First Name",
+    "Last Name",
+    "Phone",
+    "Email",
+    "Company Name",
+    "Address",
+    "City",
+    "State",
+    "Postal Code",
+    "Country",
+    "Website",
+    "Tags",
+    "Source",
+    "Description", // Opportunity summary
+    "Opportunity Status",
+    "Lead Score",
+    "Google Maps URL",
+    // Custom Fields requested
+    "Your Official Business Name",
+    "Link to your current website (IF YOU HAVE ONE)",
+    "Business Phone #",
+    "Your Location",
+    "Do You Have a Verified Google My Business Page?",
+    "Mobile Friendly",
+    "SSL Secure",
+    "Page Speed",
+    "Cold Call Script"
   ];
 
-  const rows = leads.map(lead => [
-    lead.name,
-    lead.score,
-    lead.category,
-    lead.city,
-    lead.state,
-    lead.phone || "",
-    lead.website || "N/A",
-    lead.reviewCount,
-    lead.rating,
-    lead.mapsUri,
-    lead.sslSecure === false ? "No" : "Yes/Unknown",
-    lead.hasMobileFriendlySite === false ? "No" : "Yes/Unknown",
-    lead.pageLoadSpeed || "N/A",
-    lead.isWebsiteReachable === false ? "Unreachable" : "Active",
-    lead.hasBrokenLinks ? "Yes" : "No",
-    lead.tags.join(", "),
-    `"${lead.opportunitySummary}"` // Wrap in quotes to handle commas
-  ]);
+  const rows = leads.map(lead => {
+    // Attempt to parse ZIP if missing
+    let zip = lead.zip || "";
+    if (!zip && lead.address) {
+        const match = lead.address.match(/\b\d{5}(?:-\d{4})?\b/);
+        if (match) zip = match[0];
+    }
+    
+    // Attempt to extract tags
+    const allTags = [...lead.tags, `Score: ${lead.score}`].join(", ");
+
+    // Handle CSV cell escaping (handle quotes, commas, newlines)
+    const escape = (val: string | number | undefined | null) => {
+        if (val === undefined || val === null) return "";
+        const str = String(val);
+        // If the value contains comma, double-quote or newline, we must wrap in quotes and escape internal quotes
+        if (str.includes(",") || str.includes("\n") || str.includes('"')) {
+            return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+    };
+
+    return [
+      "", // First Name (Unknown)
+      "", // Last Name (Unknown)
+      escape(lead.phone),
+      "", // Email (Not scraped by default)
+      escape(lead.name),
+      escape(lead.address),
+      escape(lead.city),
+      escape(lead.state),
+      escape(zip),
+      "USA", // Country Default
+      escape(lead.website),
+      escape(allTags),
+      "Local Lead Scraper", // Source
+      escape(lead.opportunitySummary), // Description
+      "Open", // Opportunity Status
+      lead.score,
+      escape(lead.mapsUri),
+      // Custom Fields Mapping
+      escape(lead.name), // Your Official Business Name
+      escape(lead.website), // Link to your current website
+      escape(lead.phone), // Business Phone #
+      escape(lead.city), // Your Location
+      lead.mapsUri ? "Yes" : "No", // Verified GMB
+      lead.hasMobileFriendlySite === false ? "No" : "Yes",
+      lead.sslSecure === false ? "No" : "Yes",
+      escape(lead.pageLoadSpeed),
+      escape(lead.coldCallScript)
+    ];
+  });
 
   const csvContent = "data:text/csv;charset=utf-8," 
     + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
@@ -153,7 +211,7 @@ export const exportToCSV = (leads: BusinessLead[]) => {
   const encodedUri = encodeURI(csvContent);
   const link = document.createElement("a");
   link.setAttribute("href", encodedUri);
-  link.setAttribute("download", `leads_export_${new Date().toISOString().slice(0,10)}.csv`);
+  link.setAttribute("download", `crm_leads_export_${new Date().toISOString().slice(0,10)}.csv`);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

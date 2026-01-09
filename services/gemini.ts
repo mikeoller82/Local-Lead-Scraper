@@ -286,9 +286,14 @@ export const generateColdCallScript = async (apiKey: string, lead: BusinessLead)
        - **The Solution (Teaser)**: "We built a system that fixes exactly this."
        - **The Close (Zoom Call)**: "I'd love to share my screen for 10 minutes on Zoom and show you how we fix it. Are you open to that next Tuesday?"
 
+    3. **OBJECTION HANDLING**:
+       - Anticipate the top 3 most likely objections specific to this business (e.g. "Just email me", "We are happy with current provider", "Too busy").
+       - Provide a specific, proven rebuttal for each that pivots back to booking the Zoom call. Use tactics like "The Push Pull", "Feel Felt Found", or "Level Shift".
+
     OUTPUT FORMAT:
     - **SECTION 1: Intelligence**: Bullet points of Owner Name (if found) and the Research Hook found.
     - **SECTION 2: The Script**: The exact verbatim script, using Markdown for emphasis on tonality.
+    - **SECTION 3: Objection Handling**: A structured list of common objections and the exact response script to keep the conversation alive and close the demo.
   `;
 
   try {
