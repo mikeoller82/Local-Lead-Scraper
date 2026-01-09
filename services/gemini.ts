@@ -249,3 +249,60 @@ export const deepQualifyLead = async (apiKey: string, lead: BusinessLead): Promi
     return {};
   }
 };
+
+/**
+ * Generates a personalized cold call script using Research Grounding.
+ */
+export const generateColdCallScript = async (apiKey: string, lead: BusinessLead): Promise<string> => {
+  if (!apiKey) throw new Error("API Key is missing");
+
+  const ai = new GoogleGenAI({ apiKey });
+  
+  // Use a smart model that can search and reason
+  const modelId = 'gemini-3-flash-preview';
+
+  const prompt = `
+    You are an elite Sales Development Representative (SDR) with a proven track record of booking demos.
+    
+    Target Prospect:
+    Business: ${lead.name}
+    City: ${lead.city}, ${lead.state}
+    Industry: ${lead.category}
+    Website: ${lead.website || "Unknown"}
+    Pain Points: ${lead.tags.join(', ')}
+    Opportunity: ${lead.opportunitySummary}
+
+    GOAL: Write a high-converting Cold Call Script designed to book a **15-minute Zoom/Screen Share Demo**.
+
+    INSTRUCTIONS:
+    1. **RESEARCH PHASE**: Use Google Search to find:
+       - The Owner or Founder's name.
+       - A recent event, positive review, or news item to use as a "Pattern Interrupt" (warm opener).
+    
+    2. **SCRIPT STRUCTURE (High Closing Rate)**:
+       - **The Opener**: "Hey [Name], this is [Your Name], calling from [City]. I know I'm calling out of the blue..." (Permission/Pattern Interrupt).
+       - **The Warm Up**: "I was just reading about [Research Item]..." (Disarms them).
+       - **The Pivot (The Gap)**: "The reason I'm calling is I noticed [Specific Pain Point from tags/summary] and I know that usually hurts [Revenue/Rankings]."
+       - **The Solution (Teaser)**: "We built a system that fixes exactly this."
+       - **The Close (Zoom Call)**: "I'd love to share my screen for 10 minutes on Zoom and show you how we fix it. Are you open to that next Tuesday?"
+
+    OUTPUT FORMAT:
+    - **SECTION 1: Intelligence**: Bullet points of Owner Name (if found) and the Research Hook found.
+    - **SECTION 2: The Script**: The exact verbatim script, using Markdown for emphasis on tonality.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: modelId,
+      contents: prompt,
+      config: {
+        tools: [{ googleSearch: {} }], // Grounding enabled
+      },
+    });
+
+    return response.text || "Could not generate script.";
+  } catch (e) {
+    console.error("Script generation failed", e);
+    return "Error generating script. Please try again.";
+  }
+};

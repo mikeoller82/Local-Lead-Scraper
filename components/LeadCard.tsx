@@ -1,16 +1,26 @@
 import React, { useState } from 'react';
 import { BusinessLead, LeadTag } from '../types';
 import { getScoreBadgeColor } from '../constants';
-import { Globe, MapPin, Phone, Star, ExternalLink, ChevronDown, ChevronUp, AlertCircle, Sparkles, Smartphone, Zap, Palette, CheckCircle, XCircle, Lock, Unlock, CalendarClock, Link2Off } from 'lucide-react';
+import { Globe, MapPin, Phone, Star, ExternalLink, ChevronDown, ChevronUp, AlertCircle, Sparkles, Smartphone, Zap, Palette, CheckCircle, XCircle, Lock, Unlock, CalendarClock, Link2Off, RefreshCw, Database, FileText, Copy, Check } from 'lucide-react';
 
 interface LeadCardProps {
   lead: BusinessLead;
   onDeepAnalyze: (lead: BusinessLead) => void;
+  onGenerateScript: (lead: BusinessLead) => void;
   isAnalyzing: boolean;
 }
 
-export const LeadCard: React.FC<LeadCardProps> = ({ lead, onDeepAnalyze, isAnalyzing }) => {
+export const LeadCard: React.FC<LeadCardProps> = ({ lead, onDeepAnalyze, onGenerateScript, isAnalyzing }) => {
   const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copyScript = () => {
+    if (lead.coldCallScript) {
+      navigator.clipboard.writeText(lead.coldCallScript);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   return (
     <div className={`bg-white border rounded-lg shadow-sm hover:shadow-md transition-all duration-200 ${lead.score > 75 ? 'border-l-4 border-l-red-500' : 'border-gray-200'}`}>
@@ -25,15 +35,17 @@ export const LeadCard: React.FC<LeadCardProps> = ({ lead, onDeepAnalyze, isAnaly
                 Hot Lead
               </span>
             )}
-            {lead.tags.includes('Broken Website') && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-800 text-white">
-                Broken Site
+            
+            {/* GHL Sync Status Badge */}
+            {lead.ghlSyncStatus === 'synced' && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800" title="Synced to HighLevel">
+                <Database size={10} className="mr-1" /> CRM
               </span>
             )}
-            {lead.hasBrokenLinks && (
-               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
-                 Broken Links
-               </span>
+             {lead.ghlSyncStatus === 'failed' && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800" title="Sync Failed">
+                <Database size={10} className="mr-1" /> Sync Fail
+              </span>
             )}
           </div>
           
@@ -205,21 +217,58 @@ export const LeadCard: React.FC<LeadCardProps> = ({ lead, onDeepAnalyze, isAnaly
                 ))}
               </div>
               
-              <button 
-                onClick={() => onDeepAnalyze(lead)}
-                disabled={isAnalyzing}
-                className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isAnalyzing ? (
-                  <span className="flex items-center gap-2">Analyzing...</span>
-                ) : (
-                  <>
-                    <Sparkles size={16} /> Deep Qualify with AI
-                  </>
-                )}
-              </button>
+              <div className="grid grid-cols-2 gap-3">
+                <button 
+                  onClick={() => onDeepAnalyze(lead)}
+                  disabled={isAnalyzing}
+                  className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isAnalyzing ? (
+                    <span className="flex items-center gap-2">Analyzing...</span>
+                  ) : (
+                    <>
+                      <Sparkles size={16} /> Deep Qualify
+                    </>
+                  )}
+                </button>
+
+                <button 
+                  onClick={() => onGenerateScript(lead)}
+                  disabled={lead.isGeneratingScript}
+                  className="flex items-center justify-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 py-2 px-4 rounded text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {lead.isGeneratingScript ? (
+                     <span className="flex items-center gap-2">Writing...</span>
+                  ) : (
+                    <>
+                      <FileText size={16} /> AI Script
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
+
+          {/* AI Cold Call Script Section */}
+          {lead.coldCallScript && (
+            <div className="mt-6 pt-4 border-t border-gray-200">
+               <div className="flex items-center justify-between mb-2">
+                 <h4 className="text-sm font-semibold text-indigo-900 flex items-center gap-2">
+                   <Sparkles size={14} className="text-indigo-500" /> AI Personalized Script
+                 </h4>
+                 <button 
+                   onClick={copyScript}
+                   className="text-xs flex items-center gap-1 text-gray-500 hover:text-indigo-600 transition-colors"
+                 >
+                   {copied ? <Check size={14} /> : <Copy size={14} />}
+                   {copied ? 'Copied!' : 'Copy to Clipboard'}
+                 </button>
+               </div>
+               <div className="bg-indigo-50/50 p-4 rounded-lg border border-indigo-100 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                 {lead.coldCallScript}
+               </div>
+            </div>
+          )}
         </div>
       )}
     </div>

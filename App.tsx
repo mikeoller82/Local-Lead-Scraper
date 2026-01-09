@@ -3,7 +3,8 @@ import { SearchPanel } from './components/SearchPanel';
 import { LeadCard } from './components/LeadCard';
 import { StatsOverview } from './components/StatsOverview';
 import { ApiKeyModal } from './components/ApiKeyModal';
-import { searchBusinesses, deepQualifyLead } from './services/gemini';
+import { searchBusinesses, deepQualifyLead, generateColdCallScript } from './services/gemini';
+import { syncLeadToGHL } from './services/ghl';
 import { BusinessLead, SearchParams } from './types';
 import { exportToCSV } from './utils/scoring';
 import { LayoutDashboard, Download, AlertTriangle, LogOut } from 'lucide-react';
@@ -16,29 +17,40 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   
   // API Key State
-  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [geminiApiKey, setGeminiApiKey] = useState<string | null>(null);
+  const [ghlApiKey, setGhlApiKey] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check for existing key on load
-    const storedKey = localStorage.getItem('gemini_api_key');
-    if (storedKey) {
-      setApiKey(storedKey);
-    }
+    // Check for existing keys on load
+    const storedGemini = localStorage.getItem('gemini_api_key');
+    const storedGhl = localStorage.getItem('ghl_api_key');
+    if (storedGemini) setGeminiApiKey(storedGemini);
+    if (storedGhl) setGhlApiKey(storedGhl);
   }, []);
 
-  const handleSaveApiKey = (key: string) => {
-    localStorage.setItem('gemini_api_key', key);
-    setApiKey(key);
+  const handleSaveKeys = (geminiKey: string, ghlKey: string) => {
+    localStorage.setItem('gemini_api_key', geminiKey);
+    setGeminiApiKey(geminiKey);
+    
+    if (ghlKey) {
+      localStorage.setItem('ghl_api_key', ghlKey);
+      setGhlApiKey(ghlKey);
+    } else {
+      localStorage.removeItem('ghl_api_key');
+      setGhlApiKey(null);
+    }
   };
 
   const handleClearKey = () => {
     localStorage.removeItem('gemini_api_key');
-    setApiKey(null);
+    localStorage.removeItem('ghl_api_key');
+    setGeminiApiKey(null);
+    setGhlApiKey(null);
     setLeads([]);
   };
 
   const handleSearch = async (params: SearchParams) => {
-    if (!apiKey) return;
+    if (!geminiApiKey) return;
 
     setLoading(true);
     setError(null);
@@ -46,7 +58,7 @@ const App: React.FC = () => {
     setProgressMsg('Initializing...');
     
     try {
-      const results = await searchBusinesses(apiKey, params.keyword, params.location, (msg) => setProgressMsg(msg));
+      const results = await searchBusinesses(geminiApiKey, params.keyword, params.location, (msg) => setProgressMsg(msg));
       
       // Apply client-side filters
       const filtered = results.filter(lead => {
@@ -58,7 +70,21 @@ const App: React.FC = () => {
       // Sort by opportunity score desc
       const sorted = filtered.sort((a, b) => b.score - a.score);
       
-      setLeads(sorted);
+      // AUTO-SYNC LOGIC: If GHL Key is present, sync high score leads
+      if (ghlApiKey) {
+        setProgressMsg('Syncing high-value leads to CRM...');
+        const leadsWithSync = await Promise.all(sorted.map(async (lead) => {
+          if (lead.score >= 50) {
+             const success = await syncLeadToGHL(lead, ghlApiKey);
+             return { ...lead, ghlSyncStatus: success ? 'synced' : 'failed' } as BusinessLead;
+          }
+          return { ...lead, ghlSyncStatus: 'idle' } as BusinessLead;
+        }));
+        setLeads(leadsWithSync);
+      } else {
+        setLeads(sorted);
+      }
+      
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred.');
     } finally {
@@ -68,16 +94,54 @@ const App: React.FC = () => {
   };
 
   const handleDeepAnalyze = async (lead: BusinessLead) => {
-    if (!apiKey) return;
+    if (!geminiApiKey) return;
 
     setAnalyzingId(lead.id);
     try {
-      const updates = await deepQualifyLead(apiKey, lead);
-      setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, ...updates } : l));
+      const updates = await deepQualifyLead(geminiApiKey, lead);
+      
+      setLeads(prev => prev.map(l => {
+        if (l.id === lead.id) {
+          const updatedLead = { ...l, ...updates };
+          
+          // Re-trigger sync if score improved to >= 50 and we have a key and it hasn't synced yet
+          if (ghlApiKey && updatedLead.score >= 50 && l.ghlSyncStatus !== 'synced') {
+            syncLeadToGHL(updatedLead, ghlApiKey).then(success => {
+               setLeads(current => current.map(c => 
+                 c.id === lead.id ? { ...c, ghlSyncStatus: success ? 'synced' : 'failed' } : c
+               ));
+            });
+            // return with syncing status immediately
+            return { ...updatedLead, ghlSyncStatus: 'syncing' };
+          }
+          
+          return updatedLead;
+        }
+        return l;
+      }));
+
     } catch (e) {
       console.error(e);
     } finally {
       setAnalyzingId(null);
+    }
+  };
+
+  const handleGenerateScript = async (lead: BusinessLead) => {
+    if (!geminiApiKey) return;
+
+    // Set generating state
+    setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, isGeneratingScript: true } : l));
+
+    try {
+      const script = await generateColdCallScript(geminiApiKey, lead);
+      
+      setLeads(prev => prev.map(l => 
+        l.id === lead.id ? { ...l, isGeneratingScript: false, coldCallScript: script } : l
+      ));
+    } catch (error) {
+       console.error("Script gen error", error);
+       setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, isGeneratingScript: false } : l));
     }
   };
 
@@ -88,7 +152,7 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans text-slate-800">
       
-      <ApiKeyModal isOpen={!apiKey} onSave={handleSaveApiKey} />
+      <ApiKeyModal isOpen={!geminiApiKey} onSave={handleSaveKeys} />
 
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
@@ -102,16 +166,22 @@ const App: React.FC = () => {
             </h1>
           </div>
           <div className="flex items-center gap-4">
+             {ghlApiKey && (
+               <div className="hidden md:flex items-center gap-1.5 px-2 py-1 bg-green-50 border border-green-200 rounded text-xs text-green-700 font-medium">
+                 <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                 CRM Connected
+               </div>
+             )}
              <div className="text-sm text-gray-500 hidden md:block">
                 Powered by Gemini Grounding
              </div>
-             {apiKey && (
+             {geminiApiKey && (
                <button 
                  onClick={handleClearKey} 
                  className="text-xs text-red-500 hover:text-red-700 font-medium flex items-center gap-1 border border-red-100 rounded px-2 py-1 bg-red-50"
                  title="Clear API Key"
                >
-                 <LogOut size={12} /> Clear Key
+                 <LogOut size={12} /> Clear Config
                </button>
              )}
           </div>
@@ -163,6 +233,7 @@ const App: React.FC = () => {
                   key={lead.id} 
                   lead={lead} 
                   onDeepAnalyze={handleDeepAnalyze} 
+                  onGenerateScript={handleGenerateScript}
                   isAnalyzing={analyzingId === lead.id}
                 />
               ))}
@@ -178,7 +249,7 @@ const App: React.FC = () => {
             </div>
             <h3 className="text-lg font-medium text-gray-900">No leads found yet</h3>
             <p className="text-gray-500 mt-2 max-w-md mx-auto">
-              Enter a keyword and location above to start scraping Google Maps for high-opportunity local businesses.
+              Enter a keyword and location above to start scraping Google Maps.
             </p>
           </div>
         )}

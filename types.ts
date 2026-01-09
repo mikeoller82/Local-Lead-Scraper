@@ -25,6 +25,13 @@ export interface BusinessLead {
   sslSecure?: boolean;
   contentStatus?: 'Outdated' | 'Fresh' | 'Unknown';
   hasBrokenLinks?: boolean;
+
+  // Integration Status
+  ghlSyncStatus?: 'idle' | 'syncing' | 'synced' | 'failed';
+
+  // AI Script
+  coldCallScript?: string;
+  isGeneratingScript?: boolean;
 }
 
 export type LeadTag = 
