@@ -296,25 +296,128 @@ export const deepQualifyLead = async (apiKey: string, lead: BusinessLead): Promi
  */
 export const generateColdCallScript = async (apiKey: string, lead: BusinessLead): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey });
-  const modelId = 'gemini-2.5-flash'; // Good for creative writing
+  const modelId = 'gemini-3-pro-preview'; 
 
   const prompt = `
-    Write a high-converting cold call script for a digital marketing agency calling "${lead.name}".
-    
-    Lead Info:
-    - Industry: ${lead.category}
-    - Location: ${lead.city}, ${lead.state}
-    - Score: ${lead.score}/100
-    - Weaknesses identified: ${lead.opportunitySummary}
-    - Tags: ${lead.tags.join(', ')}
+You are a senior outbound sales strategist for a high-performing digital marketing agency that works with local service businesses. You specialize in cold calls that feel consultative, respectful, and results-driven—not scripted or pushy.
 
-    The goal: Book a 15-minute demo to fix their online presence.
-    
-    Style: Professional, empathetic, direct. Avoid cheesy sales gimmicks.
-    Structure:
-    1. Opener (Pattern interrupt)
-    2. Value Prop (Mention specific weakness found)
-    3. Call to Action (Soft close)
+Task:
+Generate a high-converting cold call script for calling "${lead.name}".
+
+Lead Intelligence (use explicitly):
+
+Industry: ${lead.category}
+
+Location: ${lead.city}, ${lead.state}
+
+Lead Score: ${lead.score}/100
+
+Identified Weaknesses: ${lead.opportunitySummary}
+
+Tags / Context: ${lead.tags.join(', ')}
+
+You MUST reference at least one concrete weakness discovered in their online presence and connect it directly to lost revenue or missed leads.
+
+Primary Objective
+
+Book a 15-minute demo to help them fix their online presence.
+
+This is a soft, low-pressure close — no pricing, no pitching packages, no guarantees.
+
+Tone & Delivery Rules
+
+Professional, calm, confident, and human
+
+Sound like a local consultant, not a national agency
+
+No hype, no buzzwords, no “marketing jargon”
+
+Short sentences. Conversational cadence.
+
+Assume the prospect is busy and skeptical
+
+Script Structure (MANDATORY)
+1. Opener — Pattern Interrupt (10 to 15 seconds)
+
+Acknowledge its a cold call
+
+Earn permission to continue
+
+Sound relaxed, not salesy
+
+Example intent (do NOT copy verbatim):
+“Ill be quick—this isnt a sales blast.”
+
+2. Credibility Bridge (5 to 10 seconds)
+
+Reference location or industry
+
+Position yourself as someone who did actual research
+
+3. Value Insight (Core Hook)
+
+Call out one specific issue from ${lead.opportunitySummary}
+
+Tie it to a real business consequence
+
+Missed calls
+
+Lost Google visibility
+
+Low trust vs competitors
+
+Keep it factual and non-judgmental
+
+4. Engagement Question
+
+Ask one simple, non-threatening question to get them talking.
+
+Examples:
+
+“Is that something youve noticed too?”
+
+“Does that sound accurate?”
+
+5. Soft CTA (Demo Booking)
+
+Frame the demo as helpful, not a pitch
+
+Emphasize its short and practical
+
+Make it easy to say yes
+
+Example intent:
+“No prep. Just a quick walkthrough.”
+
+Objection Handling (Include Brief Responses)
+
+Add 2 short pivot responses for:
+
+“Im busy”
+
+“We already have someone”
+
+Keep them respectful and non-defensive.
+
+Hard Constraints
+
+Script must fit within 60 to 90 seconds spoken
+
+No emojis
+
+No exclamation points
+
+No fake urgency
+
+No claims like “guaranteed,” “explosive,” or “skyrocket”
+
+Output Format
+
+Use clear speaker lines
+
+Label each section
+
+Keep it clean and ready to read aloud
   `;
 
   try {
