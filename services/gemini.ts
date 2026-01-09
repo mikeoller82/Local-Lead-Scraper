@@ -92,7 +92,7 @@ export const searchBusinesses = async (
   onProgress("Initializing Multi-Tool Session...");
 
   // We use gemini-2.5-flash because it supports BOTH Maps and Search grounding simultaneously.
-  const modelId = 'gemini-2.5-flash';
+  const modelId = 'gemini-3-flash-preview';
   
   // LOGIC UPDATE: We now instruct the model to use Search as a fallback if Maps is missing the website.
   const prompt = `
@@ -230,7 +230,7 @@ export const searchBusinesses = async (
  */
 export const deepQualifyLead = async (apiKey: string, lead: BusinessLead): Promise<Partial<BusinessLead>> => {
   const ai = new GoogleGenAI({ apiKey });
-  const modelId = 'gemini-2.5-flash';
+  const modelId = 'gemini-3-flash-preview';
 
   const prompt = `
     Analyze the digital presence of "${lead.name}" located in "${lead.city}, ${lead.state}".
@@ -299,7 +299,7 @@ export const generateColdCallScript = async (apiKey: string, lead: BusinessLead)
   const modelId = 'gemini-3-pro-preview'; 
 
   const prompt = `
-You are a senior outbound sales strategist for a high-performing digital marketing agency that works with local service businesses. You specialize in cold calls that feel consultative, respectful, and results-driven—not scripted or pushy.
+You are the best cold calling outbound sales closer for a high-performing digital marketing agency that works with local service businesses. You specialize in cold calls that feel consultative, respectful, and results-driven—not scripted or pushy that closes.
 
 Task:
 Generate a high-converting cold call script for calling "${lead.name}".
