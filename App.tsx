@@ -125,8 +125,10 @@ const App: React.FC = () => {
         return l;
       }));
 
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      // Optional: show toast for individual analysis failure
+      // For now, just logging to console to not disrupt UI flow
     } finally {
       setAnalyzingId(null);
     }
@@ -215,7 +217,14 @@ const App: React.FC = () => {
         {error && !loading && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3 text-red-700 mb-6">
             <AlertTriangle className="h-5 w-5 flex-shrink-0" />
-            <p>{error}</p>
+            <div>
+              <p className="font-medium">{error}</p>
+              {error.includes("Quota") && (
+                <p className="text-sm mt-1 text-red-600">
+                  Try waiting a minute or create a new key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="underline hover:text-red-800">Google AI Studio</a>.
+                </p>
+              )}
+            </div>
           </div>
         )}
 

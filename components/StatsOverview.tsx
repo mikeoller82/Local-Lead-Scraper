@@ -42,7 +42,8 @@ export const StatsOverview: React.FC<StatsOverviewProps> = ({ leads }) => {
       {/* Card 2: Opportunity Breakdown */}
       <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
         <h3 className="text-gray-500 text-sm font-medium uppercase tracking-wider mb-2">Lead Quality</h3>
-        <div className="h-24 w-full">
+        {/* Fixed height container to resolve Recharts warning */}
+        <div style={{ width: '100%', height: 100 }}>
            <ResponsiveContainer width="100%" height="100%">
              <BarChart data={pieData} layout="vertical">
                 <XAxis type="number" hide />

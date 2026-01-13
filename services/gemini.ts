@@ -78,6 +78,25 @@ const parseBusinessResponse = (text: string, chunks: any[]): Partial<BusinessLea
   return [];
 };
 
+/**
+ * Common error handler for Gemini API calls
+ */
+const handleGeminiError = (error: any): never => {
+  console.error("Gemini API Error:", error);
+  
+  const msg = error.message || JSON.stringify(error);
+  
+  if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("Quota")) {
+    throw new Error("⚠️ Google API Quota Exceeded. Please wait a minute or use a different API key.");
+  }
+  
+  if (msg.includes("API Key is missing")) {
+    throw new Error("API Key is missing or invalid.");
+  }
+
+  throw new Error(`AI Service Error: ${error.message || "Unknown error occurred"}`);
+};
+
 export const searchBusinesses = async (
   apiKey: string,
   keyword: string, 
@@ -219,9 +238,10 @@ export const searchBusinesses = async (
     return validatedLeads;
 
   } catch (error: any) {
-    console.error("Gemini Search Error:", error);
-    throw new Error(`Search failed: ${error.message}`);
+    handleGeminiError(error);
   }
+  // Unreachable due to handleGeminiError throwing, but needed for TS
+  return []; 
 };
 
 /**
@@ -286,7 +306,7 @@ export const deepQualifyLead = async (apiKey: string, lead: BusinessLead): Promi
     }
     return {};
   } catch (e) {
-    console.error("Deep analysis failed", e);
+    handleGeminiError(e);
     return {};
   }
 };
@@ -389,7 +409,7 @@ Format the script clearly with sections and include brief coaching notes in [bra
     });
     return response.text || "Could not generate script.";
   } catch (e) {
-    console.error("Script generation failed", e);
-    throw e;
+    handleGeminiError(e);
+    return "Error generating script";
   }
 };
