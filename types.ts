@@ -6,6 +6,7 @@ export interface BusinessLead {
   state: string;
   zip?: string;
   phone?: string;
+  email?: string;
   website?: string | null;
   rating: number;
   reviewCount: number;

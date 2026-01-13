@@ -59,6 +59,7 @@ const parseBusinessResponse = (text: string, chunks: any[]): Partial<BusinessLea
              name: item.name,
              address: item.full_address || item.address,
              phone: item.phone,
+             email: item.email || "",
              website: item.website,
              rating: item.rating || 0,
              reviewCount: item.user_ratings_total || item.reviewCount || 0,
@@ -113,7 +114,7 @@ export const searchBusinesses = async (
   // We use gemini-2.5-flash because it supports BOTH Maps and Search grounding simultaneously.
   const modelId = 'gemini-2.5-flash';
   
-  // LOGIC UPDATE: We now instruct the model to use Search as a fallback if Maps is missing the website.
+  // LOGIC UPDATE: Instruct the model to look for emails using Search.
   const prompt = `
     Find "${keyword}" businesses in or near "${location}".
     
@@ -122,10 +123,9 @@ export const searchBusinesses = async (
     2. **CRITICAL LOCATION ACCURACY**:
        - You MUST extract the ACTUAL City, State, and Zip Code from the specific address returned by Google Maps for EACH business.
        - **DO NOT** use the user's search location (e.g., "${location}") as the default for the business location. 
-       - If the user searches "St. Louis" but the business is in "Clayton, MO", list "Clayton" as the city.
-    3. **WEBSITE CHECK**:
-       - Check the Maps data for a 'website' or 'websiteUri'.
-       - IF the website is missing in the Maps data, use **Google Search** to find the official website.
+    3. **WEBSITE & EMAIL DISCOVERY**:
+       - Check Maps for 'website'. If missing, use **Google Search**.
+       - **EMAIL SEARCH**: Use **Google Search** to find a public business email address (e.g., info@, contact@) for the business. Look for "Contact Us" pages or directory listings.
     
     RETURN FORMAT:
     Return a STRICT JSON array (no markdown text outside JSON):
@@ -134,10 +134,11 @@ export const searchBusinesses = async (
       {
         "name": "Business Name",
         "full_address": "123 Main St, City, ST 12345",
-        "city": "City Name (Extracted from address)",
-        "state": "ST (Extracted from address)",
-        "zip_code": "12345 (Extracted from address)",
+        "city": "City Name",
+        "state": "ST",
+        "zip_code": "12345",
         "phone": "Phone Number",
+        "email": "contact@business.com",
         "website": "https://verified-url.com",
         "rating": 4.5,
         "user_ratings_total": 120,
@@ -145,7 +146,7 @@ export const searchBusinesses = async (
       }
     ]
     
-    Find at least 15 results. Prioritize businesses that look like good leads (e.g. might have lower reviews or older sites).
+    Find at least 15 results. Prioritize businesses that look like good leads.
   `;
 
   try {
@@ -192,9 +193,6 @@ export const searchBusinesses = async (
         if (!finalZip && parsed.zip) finalZip = parsed.zip;
       }
       
-      // PRIORITY 3: Do NOT fallback to search location for City/State/Zip to avoid hallucinations.
-      // Leave them blank if unknown, so the user knows the data is missing rather than wrong.
-
       const finalAddress = lead.address || (matchChunk?.maps?.title) || "Address not listed";
 
       const partialLead: Partial<BusinessLead> = {
@@ -256,15 +254,16 @@ export const deepQualifyLead = async (apiKey: string, lead: BusinessLead): Promi
     Analyze the digital presence of "${lead.name}" located in "${lead.city}, ${lead.state}".
     Website: ${lead.website || "No website found"}
 
-    Task: Use Google Search to find recent reviews, social media activity, and technical details about their website if it exists.
+    Task: Use Google Search to find recent reviews, social media activity, contact details, and technical details.
     
     Determine the following:
-    1. Mobile Friendliness: (True/False/Unknown) - Is there evidence the site is mobile responsive?
-    2. Page Speed: (Slow/Average/Fast) - Any complaints or indicators of speed?
-    3. Visual Quality: (Poor/Average/Good) - Based on design standards or descriptions.
-    4. SSL Secure: (True/False) - Does the link use HTTPS?
-    5. Content Status: (Outdated/Fresh) - Are there recent posts or updates (2024-2025)?
-    6. Broken Links: (True/False) - Common issue reported?
+    1. Mobile Friendliness: (True/False/Unknown)
+    2. Page Speed: (Slow/Average/Fast)
+    3. Visual Quality: (Poor/Average/Good)
+    4. SSL Secure: (True/False)
+    5. Content Status: (Outdated/Fresh)
+    6. Broken Links: (True/False)
+    7. Contact Email: (String) - Search diligently for a public email address (e.g. info@${lead.name.replace(/\s/g,'').toLowerCase()}.com or similar) if not already known.
 
     Return JSON only:
     {
@@ -273,7 +272,8 @@ export const deepQualifyLead = async (apiKey: string, lead: BusinessLead): Promi
       "visualQualityScore": "Poor" | "Average" | "Good",
       "sslSecure": boolean,
       "contentStatus": "Outdated" | "Fresh",
-      "hasBrokenLinks": boolean
+      "hasBrokenLinks": boolean,
+      "email": "string" 
     }
   `;
 
@@ -293,7 +293,17 @@ export const deepQualifyLead = async (apiKey: string, lead: BusinessLead): Promi
        const data = JSON.parse(jsonMatch[1] || jsonMatch[0]);
        
        // Update logic: Recalculate score with new deep data
+       // Note: If data.email is empty string, we might want to keep original if it existed, 
+       // but typically deep search is better. We'll handle merge in UI or here.
+       // Here we just return the delta.
        const updatedLeadStub = { ...lead, ...data };
+       
+       // If deep search found an email and we didn't have one, or even if we did, assume deep search is more recent/verified? 
+       // Actually, we'll just merge it.
+       if (!data.email && lead.email) {
+          data.email = lead.email; // Keep existing if new is empty
+       }
+
        const { score, summary } = calculateLeadScore(updatedLeadStub);
        const tags = determineTags(updatedLeadStub);
 

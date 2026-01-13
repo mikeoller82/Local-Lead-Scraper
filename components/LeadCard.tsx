@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { BusinessLead, LeadTag } from '../types';
 import { getScoreBadgeColor } from '../constants';
-import { Globe, MapPin, Phone, Star, ExternalLink, ChevronDown, ChevronUp, AlertCircle, Sparkles, Smartphone, Zap, Palette, CheckCircle, XCircle, Lock, Unlock, CalendarClock, Link2Off, RefreshCw, Database, FileText, Copy, Check } from 'lucide-react';
+import { Globe, MapPin, Phone, Star, ExternalLink, ChevronDown, ChevronUp, AlertCircle, Sparkles, Smartphone, Zap, Palette, CheckCircle, XCircle, Lock, Unlock, CalendarClock, Link2Off, RefreshCw, Database, FileText, Copy, Check, Mail } from 'lucide-react';
 
 interface LeadCardProps {
   lead: BusinessLead;
@@ -99,6 +99,10 @@ export const LeadCard: React.FC<LeadCardProps> = ({ lead, onDeepAnalyze, onGener
                 <div className="flex items-center justify-between">
                   <span className="text-gray-500 flex items-center gap-2"><Phone size={14} /> Phone</span>
                   <span className="font-medium text-gray-900">{lead.phone || 'N/A'}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500 flex items-center gap-2"><Mail size={14} /> Email</span>
+                  <span className="font-medium text-gray-900 select-all">{lead.email || 'N/A'}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-gray-500 flex items-center gap-2"><Globe size={14} /> Website</span>

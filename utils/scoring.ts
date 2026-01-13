@@ -217,7 +217,7 @@ export const exportToCSV = (leads: BusinessLead[]) => {
     return [
       escape(lead.name), // Company Name
       escape(lead.phone), // Phone
-      "", // Email (Scraper doesn't get email by default)
+      escape(lead.email), // Email (Updated from "")
       escape(lead.website), // Website
       escape(lead.address), // Address
       escape(state), // State
@@ -227,7 +227,7 @@ export const exportToCSV = (leads: BusinessLead[]) => {
       "USA", // Country
       "", // First Name (Unknown)
       "", // Last Name (Unknown)
-      "", // Email (Contact)
+      escape(lead.email), // Email (Contact)
       escape(lead.phone), // Phone (Contact - reused)
       "", // Date Of Birth
       "Local Lead Scraper", // Contact Source
