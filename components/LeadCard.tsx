@@ -234,16 +234,9 @@ export const LeadCard: React.FC<LeadCardProps> = ({ lead, onDeepAnalyze, onGener
 
                 <button 
                   onClick={() => onGenerateScript(lead)}
-                  disabled={lead.isGeneratingScript}
-                  className="flex items-center justify-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 py-2 px-4 rounded text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center justify-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 py-2 px-4 rounded text-sm font-medium transition-colors"
                 >
-                  {lead.isGeneratingScript ? (
-                     <span className="flex items-center gap-2">Writing...</span>
-                  ) : (
-                    <>
-                      <FileText size={16} /> AI Script
-                    </>
-                  )}
+                   <FileText size={16} /> AI Script
                 </button>
               </div>
             </div>
@@ -256,13 +249,21 @@ export const LeadCard: React.FC<LeadCardProps> = ({ lead, onDeepAnalyze, onGener
                  <h4 className="text-sm font-semibold text-indigo-900 flex items-center gap-2">
                    <Sparkles size={14} className="text-indigo-500" /> AI Personalized Script
                  </h4>
-                 <button 
-                   onClick={copyScript}
-                   className="text-xs flex items-center gap-1 text-gray-500 hover:text-indigo-600 transition-colors"
-                 >
-                   {copied ? <Check size={14} /> : <Copy size={14} />}
-                   {copied ? 'Copied!' : 'Copy to Clipboard'}
-                 </button>
+                 <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => onGenerateScript(lead)} 
+                      className="text-xs text-indigo-600 hover:text-indigo-800"
+                    >
+                      Regenerate
+                    </button>
+                    <button 
+                      onClick={copyScript}
+                      className="text-xs flex items-center gap-1 text-gray-500 hover:text-indigo-600 transition-colors"
+                    >
+                      {copied ? <Check size={14} /> : <Copy size={14} />}
+                      {copied ? 'Copied!' : 'Copy to Clipboard'}
+                    </button>
+                 </div>
                </div>
                <div className="bg-indigo-50/50 p-4 rounded-lg border border-indigo-100 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
                  {lead.coldCallScript}

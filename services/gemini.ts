@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { BusinessLead, LeadTag } from "../types";
+import { BusinessLead, LeadTag, ScriptConfiguration } from "../types";
 import { calculateLeadScore, determineTags } from "../utils/scoring";
 import { validateWebsiteUrl } from "../utils/validation";
 
@@ -230,7 +230,7 @@ export const searchBusinesses = async (
  */
 export const deepQualifyLead = async (apiKey: string, lead: BusinessLead): Promise<Partial<BusinessLead>> => {
   const ai = new GoogleGenAI({ apiKey });
-  const modelId = 'gemini-3-flash-preview';
+  const modelId = 'gemini-2.5-flash';
 
   const prompt = `
     Analyze the digital presence of "${lead.name}" located in "${lead.city}, ${lead.state}".
@@ -292,46 +292,38 @@ export const deepQualifyLead = async (apiKey: string, lead: BusinessLead): Promi
 };
 
 /**
- * Generates a personalized cold call script using AI.
+ * Generates a highly personalized cold call script using detailed configuration.
  */
-export const generateColdCallScript = async (apiKey: string, lead: BusinessLead): Promise<string> => {
+export const generateColdCallScript = async (
+  apiKey: string, 
+  config: ScriptConfiguration
+): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey });
-  const modelId = 'gemini-3-pro-preview'; 
+  // Using gemini-2.5-flash as it is fast and creative enough for this task
+  const modelId = 'gemini-2.5-flash'; 
 
   const prompt = `
 Create a highly personalized, non-generic cold call script with the following specifications:
 
-Task:
-Generate a cold call script for "${lead.name}" that gets them to agree to a 15-minute demo.
-
-Lead Intelligence (use strategically):
-- Industry: ${lead.category}
-- Location: ${lead.city}, ${lead.state}
-- Lead Score: ${lead.score}/100
-- Identified Weaknesses: ${lead.opportunitySummary}
-- Tags/Context: ${lead.tags.join(', ')}
-
-Core Philosophy:
-
 CALLER INFORMATION:
-- Name: [callerName]
-- Title: [callerTitle]
-- Company: [companyName]
+- Name: ${config.caller.name}
+- Title: ${config.caller.title}
+- Company: ${config.caller.company}
 
 TARGET PROSPECT:
-- Industry: [industry]
-- Role/Title: [targetRole]
-- Company Size: [companySize]
+- Industry: ${config.prospect.industry}
+- Role/Title: ${config.prospect.role}
+- Company Size: ${config.prospect.companySize}
 
 VALUE PROPOSITION:
-- Main Pain Point: [painPoint]
-- Solution Offered: [solution]
-- Unique Value: [valueProposition]
-- Social Proof: [socialProof]
+- Main Pain Point: ${config.valueProp.painPoint}
+- Solution Offered: ${config.valueProp.solution}
+- Unique Value: ${config.valueProp.uniqueValue}
+- Social Proof: ${config.valueProp.socialProof}
 
 CALL PARAMETERS:
-- Objective: [callObjective]
-- Tone: [tone]
+- Objective: ${config.config.objective}
+- Tone: ${config.config.tone}
 
 Generate a complete cold call script that includes:
 
@@ -382,7 +374,7 @@ REQUIREMENTS:
 - Add [PAUSE] markers where appropriate
 - Include confidence-building affirmations in brackets
 - Make it feel personalized, not templated
-- Use the "[tone]" tone throughout
+- Use the "${config.config.tone}" tone throughout
 - Focus on the prospect, not just the product
 - Build curiosity and intrigue
 - Include tactical empathy statements
@@ -398,6 +390,6 @@ Format the script clearly with sections and include brief coaching notes in [bra
     return response.text || "Could not generate script.";
   } catch (e) {
     console.error("Script generation failed", e);
-    return "Error generating script.";
+    throw e;
   }
 };

@@ -70,3 +70,28 @@ export interface ChartData {
   value: number;
   color: string;
 }
+
+// --- Script Generator Types ---
+
+export interface ScriptConfiguration {
+  caller: {
+    name: string;
+    title: string;
+    company: string;
+  };
+  prospect: {
+    industry: string;
+    role: string;
+    companySize: string;
+  };
+  valueProp: {
+    painPoint: string;
+    solution: string;
+    uniqueValue: string;
+    socialProof: string;
+  };
+  config: {
+    objective: string;
+    tone: string;
+  };
+}

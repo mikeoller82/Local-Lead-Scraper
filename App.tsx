@@ -3,7 +3,8 @@ import { SearchPanel } from './components/SearchPanel';
 import { LeadCard } from './components/LeadCard';
 import { StatsOverview } from './components/StatsOverview';
 import { ApiKeyModal } from './components/ApiKeyModal';
-import { searchBusinesses, deepQualifyLead, generateColdCallScript } from './services/gemini';
+import { ScriptGeneratorModal } from './components/ScriptGeneratorModal';
+import { searchBusinesses, deepQualifyLead } from './services/gemini';
 import { syncLeadToGHL } from './services/ghl';
 import { BusinessLead, SearchParams } from './types';
 import { exportToCSV } from './utils/scoring';
@@ -19,6 +20,10 @@ const App: React.FC = () => {
   // API Key State
   const [geminiApiKey, setGeminiApiKey] = useState<string | null>(null);
   const [ghlApiKey, setGhlApiKey] = useState<string | null>(null);
+
+  // Script Generator Modal State
+  const [scriptModalOpen, setScriptModalOpen] = useState(false);
+  const [selectedLeadForScript, setSelectedLeadForScript] = useState<BusinessLead | null>(null);
 
   useEffect(() => {
     // Check for existing keys on load
@@ -127,22 +132,15 @@ const App: React.FC = () => {
     }
   };
 
-  const handleGenerateScript = async (lead: BusinessLead) => {
-    if (!geminiApiKey) return;
+  const handleOpenScriptModal = (lead: BusinessLead) => {
+    setSelectedLeadForScript(lead);
+    setScriptModalOpen(true);
+  };
 
-    // Set generating state
-    setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, isGeneratingScript: true } : l));
-
-    try {
-      const script = await generateColdCallScript(geminiApiKey, lead);
-      
-      setLeads(prev => prev.map(l => 
-        l.id === lead.id ? { ...l, isGeneratingScript: false, coldCallScript: script } : l
-      ));
-    } catch (error) {
-       console.error("Script gen error", error);
-       setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, isGeneratingScript: false } : l));
-    }
+  const handleScriptGenerated = (leadId: string, script: string) => {
+    setLeads(prev => prev.map(l => 
+      l.id === leadId ? { ...l, coldCallScript: script } : l
+    ));
   };
 
   const handleExport = () => {
@@ -153,6 +151,17 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans text-slate-800">
       
       <ApiKeyModal isOpen={!geminiApiKey} onSave={handleSaveKeys} />
+      
+      {/* Script Generator Modal */}
+      {selectedLeadForScript && geminiApiKey && (
+        <ScriptGeneratorModal 
+          isOpen={scriptModalOpen}
+          onClose={() => setScriptModalOpen(false)}
+          lead={selectedLeadForScript}
+          apiKey={geminiApiKey}
+          onScriptGenerated={handleScriptGenerated}
+        />
+      )}
 
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
@@ -233,7 +242,7 @@ const App: React.FC = () => {
                   key={lead.id} 
                   lead={lead} 
                   onDeepAnalyze={handleDeepAnalyze} 
-                  onGenerateScript={handleGenerateScript}
+                  onGenerateScript={handleOpenScriptModal}
                   isAnalyzing={analyzingId === lead.id}
                 />
               ))}
