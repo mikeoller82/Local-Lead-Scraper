@@ -299,7 +299,7 @@ export const generateColdCallScript = async (apiKey: string, lead: BusinessLead)
   const modelId = 'gemini-3-pro-preview'; 
 
   const prompt = `
-You are an elite cold calling closer for a digital marketing agency specializing in local service businesses. Your scripts book demos at a 40%+ conversion rate because they sound like actual human conversations—not sales pitches.
+Create a highly personalized, non-generic cold call script with the following specifications:
 
 Task:
 Generate a cold call script for "${lead.name}" that gets them to agree to a 15-minute demo.
@@ -312,183 +312,82 @@ Lead Intelligence (use strategically):
 - Tags/Context: ${lead.tags.join(', ')}
 
 Core Philosophy:
-You're calling to point out something broken that's costing them money. That's it. No fluff. No hype. Just signal a problem they probably already suspect exists, then offer a quick look at how to fix it.
 
-Script Requirements:
+CALLER INFORMATION:
+- Name: [callerName]
+- Title: [callerTitle]
+- Company: [companyName]
 
-1. OPENER (8-12 seconds)
-- Acknowledge it's a cold call immediately
-- No fake familiarity
-- Get permission to continue in one sentence
-- Sound like you're doing them a favor by keeping it brief
+TARGET PROSPECT:
+- Industry: [industry]
+- Role/Title: [targetRole]
+- Company Size: [companySize]
 
-Bad: "Hey! How's your day going?"
-Good: "This is a cold call, so I'll make it quick—do you have 30 seconds?"
+VALUE PROPOSITION:
+- Main Pain Point: [painPoint]
+- Solution Offered: [solution]
+- Unique Value: [valueProposition]
+- Social Proof: [socialProof]
 
-2. CONTEXT (5-8 seconds)
-- Mention their city or industry to prove this isn't a blast
-- No generic praise
-- Establish you looked at their actual business
+CALL PARAMETERS:
+- Objective: [callObjective]
+- Tone: [tone]
 
-Bad: "I work with businesses like yours"
-Good: "I was looking at HVAC companies in Denver and pulled up your site"
+Generate a complete cold call script that includes:
 
-3. THE HOOK (15-20 seconds)
-- State ONE specific problem from ${lead.opportunitySummary}
-- Connect it directly to lost revenue or missed jobs
-- Use plain language a business owner would use
-- No marketing jargon
+1. **GATEKEEPER BYPASS** (if applicable)
+   - Professional approach to get past the receptionist
+   - Pattern interrupt if needed
 
-Bad: "Your SEO strategy lacks optimization"
-Good: "Your Google listing doesn't show your phone number on mobile, so people are probably calling your competitors instead"
+2. **OPENING** (First 10 seconds)
+   - Personalized introduction
+   - Permission-based pattern interrupt
+   - Avoid generic "How are you today?"
 
-4. PERMISSION QUESTION (1 sentence)
-- Get them to confirm the problem or engage
-- Make it easy to answer
+3. **REASON FOR CALL** (15-20 seconds)
+   - Specific, relevant reason tied to their industry/role
+   - Reference to research or trigger event if possible
 
-Examples:
-"Is that something you've seen happen?"
-"Does that match what you're hearing from customers?"
+4. **VALUE STATEMENT** (20 seconds)
+   - Clear articulation of value specific to their pain point
+   - Quantifiable benefit or outcome
+   - Reference to similar company success
 
-5. THE CLOSE (10-15 seconds)
-- Offer a 15-minute demo
-- Frame it as showing them something, not selling them something
-- Remove friction
-- Make saying yes easier than saying no
+5. **QUALIFYING QUESTIONS** (3-5 questions)
+   - Open-ended questions that uncover needs
+   - Questions that get them talking about challenges
+   - Budget/authority qualifying questions
 
-Bad: "Can I schedule some time to discuss solutions?"
-Good: "I can show you exactly what I'm seeing in 15 minutes tomorrow. No pitch, just screen share what's broken and how to fix it. Does 2pm or 4pm work better?"
+6. **OBJECTION HANDLING**
+   - "I'm not interested" response
+   - "Send me information" response
+   - "I'm too busy" response
+   - "We're already working with someone" response
+   - "Call me back in [timeframe]" response
 
-Objection Handling (MANDATORY - Include ALL):
+7. **CLOSING/NEXT STEPS**
+   - Clear, specific call-to-action
+   - Calendar booking technique
+   - Alternative close options
 
-"I'm busy / Don't have time" →
-Acknowledge. Emphasize brevity. Reframe as time-saving.
-Example: "I get it. That's why I'm saying 15 minutes, not an hour. I'll show you the problem in 5 minutes, you tell me if it's worth the other 10. If not, we're done."
+8. **VOICEMAIL SCRIPT**
+   - Compelling 20-30 second voicemail
+   - Callback hook
+   - Clear next action
 
-"We already work with someone / have a marketing company" →
-Don't compete. Position as second opinion.
-Example: "That's fine. I'm not trying to replace anyone. This is just about one specific thing I saw that's costing you calls right now. If your team can fix it, perfect. 15 minutes to show you what I mean."
+REQUIREMENTS:
+- Make it conversational, not robotic
+- Use industry-specific language and insights
+- Include natural transitions and tonality cues
+- Add [PAUSE] markers where appropriate
+- Include confidence-building affirmations in brackets
+- Make it feel personalized, not templated
+- Use the "[tone]" tone throughout
+- Focus on the prospect, not just the product
+- Build curiosity and intrigue
+- Include tactical empathy statements
 
-"How much does this cost?" →
-Deflect to demo. Never quote pricing on cold call.
-Example: "I don't even know if we're a fit yet. The demo's free and there's no obligation. Let me show you what I found, then we can talk about whether it makes sense to work together."
-Alternative: "Depends entirely on what you need fixed. I can't quote you without understanding your situation. That's what the 15 minutes is for."
-
-"Send me some information / email me" →
-Emails get ignored. Push for live demo.
-Example: "I could, but honestly it won't make sense without context. It takes longer to read an email than to just show you on a screen share. How about tomorrow at 3?"
-Alternative: "Sure, but you'll delete it. Everyone does. Let me just show you live what I'm talking about, then I'll send a follow-up if it makes sense."
-
-"We don't have the budget right now" →
-Separate demo from commitment. Discovery first.
-Example: "That's fair. But you don't need a budget to see what's broken. The demo's free. You might find out it's a cheap fix, or something you can handle yourself. Either way, you'll know what the problem is."
-
-"I need to think about it" →
-What is there to think about? It's just a demo.
-Example: "Think about what? It's 15 minutes to see if there's a problem. Nothing to commit to. If you see it and don't care, we're done. If you do care, then you can think about what to do next."
-
-"We're getting good results already" →
-Plant doubt. Challenge complacency.
-Example: "That's great. But if your phone number's not showing up on mobile Google searches, you're still losing calls you don't even know about. Takes 15 minutes to see if that's actually happening or not."
-
-"Call me back in a few months" →
-The problem exists now. Future call = never.
-Example: "I can, but this issue is costing you money today. If I call you in three months, you've lost three more months of leads. Let me just show you what I mean tomorrow and you decide if it's urgent or not."
-
-"Not interested" →
-Respect it but challenge the premise.
-Example: "Fair enough. But you're not interested in something you haven't seen yet. I'm just asking for 15 minutes to show you one thing that's broken. If I'm wrong, you kick me off the call. Deal?"
-
-Cost Question Deep Handling:
-
-When they push hard on price:
-"What's the ballpark?" →
-"Anywhere from a few hundred to a few thousand depending on what needs fixing. I genuinely can't tell you more without seeing your full setup. That's the point of the demo."
-
-"Is this going to be expensive?" →
-"Compared to what? Losing customers to your competitors every week? Probably not. But I can't give you a number until I see what we're working with."
-
-"What do you typically charge?" →
-"Depends on the business. Some clients spend $500 a month, others spend $3,000. But that's after we know what the problem is. Let me show you what I found first."
-
-Hard Rules:
-- Total script: 60-75 seconds when read aloud
-- Objection responses: 10-20 seconds each, max
-- Use contractions (I'm, you're, doesn't)
-- No exclamation points
-- No words like: revolutionary, game-changer, guaranteed, exclusive, limited-time
-- No fake scarcity
-- No asking "how are you" or "is this a good time"
-- Every sentence should move toward the demo or disqualify
-- Never quote specific pricing on the cold call
-- Never apologize for calling
-
-Tone Calibration:
-- Confident but not cocky
-- Helpful but not desperate  
-- Direct but not aggressive
-- Challenging but not argumentative
-- You're a peer calling with useful information, not a vendor begging for attention
-- When handling objections: calm, unshaken, matter-of-fact
-
-Output Format:
-[OPENER]
-Clear dialogue
-
-[CONTEXT]
-Clear dialogue
-
-[HOOK]
-Clear dialogue
-
-[PERMISSION QUESTION]
-Clear dialogue
-
-[CLOSE]
-Clear dialogue
-
----
-OBJECTION RESPONSES:
-
-[OBJECTION: I'm busy/No time]
-Response
-
-[OBJECTION: We work with someone already]
-Response
-
-[OBJECTION: How much does this cost?]
-Response
-
-[OBJECTION: Send me information]
-Response
-
-[OBJECTION: No budget right now]
-Response
-
-[OBJECTION: Need to think about it]
-Response
-
-[OBJECTION: Getting good results already]
-Response
-
-[OBJECTION: Call back later]
-Response
-
-[OBJECTION: Not interested]
-Response
-
-[COST QUESTION: What's the ballpark?]
-Response
-
-[COST QUESTION: Is this expensive?]
-Response
-
-[COST QUESTION: What do you typically charge?]
-Response
-
----
-
-The script should sound like you're pointing at something specific on their porch that's broken, not trying to sell them a whole new house. Objections are not roadblocks—they're opportunities to reframe the demo as low-risk and high-value.
+Format the script clearly with sections and include brief coaching notes in [brackets] for delivery tips.
   `;
 
   try {
