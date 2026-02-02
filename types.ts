@@ -1,3 +1,4 @@
+
 export interface BusinessLead {
   id: string;
   name: string;
@@ -95,4 +96,9 @@ export interface ScriptConfiguration {
     objective: string;
     tone: string;
   };
+}
+
+export interface ChatMessage {
+  role: 'user' | 'model';
+  text: string;
 }

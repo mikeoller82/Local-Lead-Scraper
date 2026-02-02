@@ -127,13 +127,14 @@ export const exportToCSV = (leads: BusinessLead[]) => {
     "Email",
     "Website",
     "Address",
-    "City",
     "State",
+    "City",
     "Description",
     "Postal Code",
     "Country",
     "Contact Source",
-    "Contact Type"
+    "Contact Type",
+    "Google Reviews"
   ];
 
   const escape = (val: string | number | undefined | null) => {
@@ -173,13 +174,14 @@ export const exportToCSV = (leads: BusinessLead[]) => {
       escape(lead.email), // Email
       escape(lead.website), // Website
       escape(lead.address), // Address
-      escape(city), // City
       escape(state), // State
+      escape(city), // City
       escape(lead.opportunitySummary), // Description
       escape(zip), // Postal Code
       "USA", // Country
       "Local Lead Scraper", // Contact Source
-      "Lead" // Contact Type
+      "Lead", // Contact Type
+      lead.reviewCount || 0 // Google Reviews
     ];
   });
 

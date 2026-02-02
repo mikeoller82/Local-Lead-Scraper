@@ -1,5 +1,5 @@
-import { GoogleGenAI } from "@google/genai";
-import { BusinessLead, LeadTag, ScriptConfiguration } from "../types";
+import { GoogleGenAI, ChatSession, GenerateContentResponse } from "@google/genai";
+import { BusinessLead, LeadTag, ScriptConfiguration, ChatMessage } from "../types";
 import { calculateLeadScore, determineTags } from "../utils/scoring";
 import { validateWebsiteUrl } from "../utils/validation";
 
@@ -422,4 +422,72 @@ Format the script clearly with sections and include brief coaching notes in [bra
     handleGeminiError(e);
     return "Error generating script";
   }
+};
+
+/**
+ * Initializes a roleplay chat session with an AI acting as the prospect.
+ */
+export const createPracticeSession = async (apiKey: string, config: ScriptConfiguration): Promise<ChatSession> => {
+    const ai = new GoogleGenAI({ apiKey });
+    const modelId = 'gemini-2.5-flash';
+
+    const systemInstruction = `
+        You are a roleplaying partner. You are acting as a ${config.prospect.role} at a ${config.prospect.companySize} company in the ${config.prospect.industry} industry.
+        You are receiving a cold call from ${config.caller.name} from ${config.caller.company}.
+        
+        Your Personality:
+        - Busy and slightly skeptical, but professional.
+        - You get many cold calls, so you value brevity.
+        - If the caller addresses your pain point (${config.valueProp.painPoint}), you become interested.
+        - If the caller sounds robotic, you might hang up or be dismissive.
+        - Keep your responses short (1-2 sentences) to simulate a real phone conversation.
+        - Do not break character. Do not say "I am an AI". Act exactly like the prospect.
+        - Respond naturally to the user's greeting.
+    `;
+
+    const chat = ai.chats.create({
+        model: modelId,
+        config: {
+            systemInstruction,
+            temperature: 0.9, // Higher temp for more natural/varied responses
+        }
+    });
+
+    return chat;
+};
+
+/**
+ * Generates feedback on the practice session.
+ */
+export const getPracticeFeedback = async (apiKey: string, history: ChatMessage[]): Promise<string> => {
+    const ai = new GoogleGenAI({ apiKey });
+    const modelId = 'gemini-2.5-flash';
+
+    const transcript = history.map(m => `${m.role.toUpperCase()}: ${m.text}`).join('\n');
+
+    const prompt = `
+        Analyze the following cold call transcript between a Salesperson (USER) and a Prospect (MODEL).
+        
+        TRANSCRIPT:
+        ${transcript}
+        
+        Provide constructive feedback on the Salesperson's performance:
+        1. **Strengths**: What did they do well?
+        2. **Weaknesses**: Where did they stumble?
+        3. **Objection Handling**: How well did they handle pushback?
+        4. **Score**: Give a score out of 10.
+        
+        Keep it concise and actionable.
+    `;
+
+    try {
+        const result = await ai.models.generateContent({
+            model: modelId,
+            contents: prompt
+        });
+        return result.text || "No feedback generated.";
+    } catch (e) {
+        console.error("Feedback generation error:", e);
+        return "Could not generate feedback.";
+    }
 };
