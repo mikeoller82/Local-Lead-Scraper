@@ -109,55 +109,51 @@ export const searchBusinesses = async (
 
   const ai = new GoogleGenAI({ apiKey });
   
-  onProgress("Initializing Multi-Tool Session...");
+  onProgress("Accessing Google Maps & Search Indexes...");
 
-  // We use gemini-2.5-flash because it supports BOTH Maps and Search grounding simultaneously.
+  // gemini-2.5-flash is optimized for multi-tool usage and speed
   const modelId = 'gemini-2.5-flash';
   
-  // LOGIC UPDATE: Instruct the model to look for emails using Search.
+  // SOPHISTICATED PROMPT:
+  // 1. Explicitly asks for 20+ results (Maps usually returns 20 per page).
+  // 2. Enforces a fallback: If Maps has no website, use Search.
+  // 3. Stricts JSON output.
   const prompt = `
-    Find "${keyword}" businesses in or near "${location}".
+    Find at least 20 businesses matching "${keyword}" in "${location}".
     
-    EXECUTION LOGIC:
-    1. Use **Google Maps** to find the business list, ratings, and addresses.
-    2. **CRITICAL LOCATION ACCURACY**:
-       - You MUST extract the ACTUAL City, State, and Zip Code from the specific address returned by Google Maps for EACH business.
-       - **DO NOT** use the user's search location (e.g., "${location}") as the default for the business location. 
-    3. **WEBSITE & EMAIL DISCOVERY**:
-       - Check Maps for 'website'. If missing, use **Google Search**.
-       - **EMAIL SEARCH**: Use **Google Search** to find a public business email address (e.g., info@, contact@) for the business. Look for "Contact Us" pages or directory listings.
-    
+    EXECUTION STEPS:
+    1. **Primary Source**: Use **Google Maps** to find the list of businesses.
+    2. **Data Enrichment**: 
+       - For EACH business found, you MUST check if a 'website' is listed.
+       - **CRITICAL**: If the Google Maps result does NOT have a website, use **Google Search** to find the official website for that specific business name and city.
+       - Do not leave the website field empty unless you are 100% certain no website exists after searching.
+    3. **Address Accuracy**: Extract the full specific address, including City and Zip Code.
+
     RETURN FORMAT:
-    Return a STRICT JSON array (no markdown text outside JSON):
+    Strictly output a JSON array of objects. Do not include markdown code blocks or text outside the JSON.
     
     [
       {
-        "name": "Business Name",
-        "full_address": "123 Main St, City, ST 12345",
-        "city": "City Name",
-        "state": "ST",
-        "zip_code": "12345",
-        "phone": "Phone Number",
-        "email": "contact@business.com",
-        "website": "https://verified-url.com",
-        "rating": 4.5,
-        "user_ratings_total": 120,
-        "category": "Primary Category"
+        "name": "Exact Business Name",
+        "full_address": "123 Street, City, State Zip",
+        "phone": "(555) 123-4567",
+        "website": "https://...",
+        "rating": 4.8,
+        "user_ratings_total": 150,
+        "category": "Plumber"
       }
     ]
-    
-    Find at least 15 results. Prioritize businesses that look like good leads.
   `;
 
   try {
-    onProgress("Querying Google Maps & Search Indexes...");
-    
     const response = await ai.models.generateContent({
       model: modelId,
       contents: prompt,
       config: {
-        // LOGIC REFINEMENT: Enable BOTH tools to fix the "missing website" false negative.
+        // We provide BOTH tools to allow the model to fallback to Search for missing websites
         tools: [{ googleMaps: {} }, { googleSearch: {} }],
+        // Slightly higher temperature to allow it to "think" about using Search
+        temperature: 0.7 
       },
     });
 
@@ -292,16 +288,10 @@ export const deepQualifyLead = async (apiKey: string, lead: BusinessLead): Promi
     if (jsonMatch) {
        const data = JSON.parse(jsonMatch[1] || jsonMatch[0]);
        
-       // Update logic: Recalculate score with new deep data
-       // Note: If data.email is empty string, we might want to keep original if it existed, 
-       // but typically deep search is better. We'll handle merge in UI or here.
-       // Here we just return the delta.
        const updatedLeadStub = { ...lead, ...data };
        
-       // If deep search found an email and we didn't have one, or even if we did, assume deep search is more recent/verified? 
-       // Actually, we'll just merge it.
        if (!data.email && lead.email) {
-          data.email = lead.email; // Keep existing if new is empty
+          data.email = lead.email; 
        }
 
        const { score, summary } = calculateLeadScore(updatedLeadStub);
@@ -329,7 +319,6 @@ export const generateColdCallScript = async (
   config: ScriptConfiguration
 ): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey });
-  // Using gemini-2.5-flash as it is fast and creative enough for this task
   const modelId = 'gemini-2.5-flash'; 
 
   const prompt = `
@@ -356,60 +345,16 @@ CALL PARAMETERS:
 - Tone: ${config.config.tone}
 
 Generate a complete cold call script that includes:
+1. GATEKEEPER BYPASS
+2. OPENING (Permission-based pattern interrupt)
+3. REASON FOR CALL
+4. VALUE STATEMENT
+5. QUALIFYING QUESTIONS
+6. OBJECTION HANDLING
+7. CLOSING/NEXT STEPS
+8. VOICEMAIL SCRIPT
 
-1. **GATEKEEPER BYPASS** (if applicable)
-   - Professional approach to get past the receptionist
-   - Pattern interrupt if needed
-
-2. **OPENING** (First 10 seconds)
-   - Personalized introduction
-   - Permission-based pattern interrupt
-   - Avoid generic "How are you today?"
-
-3. **REASON FOR CALL** (15-20 seconds)
-   - Specific, relevant reason tied to their industry/role
-   - Reference to research or trigger event if possible
-
-4. **VALUE STATEMENT** (20 seconds)
-   - Clear articulation of value specific to their pain point
-   - Quantifiable benefit or outcome
-   - Reference to similar company success
-
-5. **QUALIFYING QUESTIONS** (3-5 questions)
-   - Open-ended questions that uncover needs
-   - Questions that get them talking about challenges
-   - Budget/authority qualifying questions
-
-6. **OBJECTION HANDLING**
-   - "I'm not interested" response
-   - "Send me information" response
-   - "I'm too busy" response
-   - "We're already working with someone" response
-   - "Call me back in [timeframe]" response
-
-7. **CLOSING/NEXT STEPS**
-   - Clear, specific call-to-action
-   - Calendar booking technique
-   - Alternative close options
-
-8. **VOICEMAIL SCRIPT**
-   - Compelling 20-30 second voicemail
-   - Callback hook
-   - Clear next action
-
-REQUIREMENTS:
-- Make it conversational, not robotic
-- Use industry-specific language and insights
-- Include natural transitions and tonality cues
-- Add [PAUSE] markers where appropriate
-- Include confidence-building affirmations in brackets
-- Make it feel personalized, not templated
-- Use the "${config.config.tone}" tone throughout
-- Focus on the prospect, not just the product
-- Build curiosity and intrigue
-- Include tactical empathy statements
-
-Format the script clearly with sections and include brief coaching notes in [brackets] for delivery tips.
+Make it conversational, professional, and persuasive. Use [Brackets] for coaching notes.
   `;
 
   try {
@@ -449,7 +394,7 @@ export const createPracticeSession = async (apiKey: string, config: ScriptConfig
         model: modelId,
         config: {
             systemInstruction,
-            temperature: 0.9, // Higher temp for more natural/varied responses
+            temperature: 0.9,
         }
     });
 
