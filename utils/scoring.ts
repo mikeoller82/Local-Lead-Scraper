@@ -121,66 +121,19 @@ export const determineTags = (lead: Partial<BusinessLead>): LeadTag[] => {
 };
 
 export const exportToCSV = (leads: BusinessLead[]) => {
-  // STRICT MAPPING: Includes duplicates as per the GHL snapshot requirements provided
   const headers = [
     "Company Name",
     "Phone",
     "Email",
     "Website",
     "Address",
-    "State",
     "City",
+    "State",
     "Description",
     "Postal Code",
     "Country",
-    "First Name",
-    "Last Name",
-    "Email", // Contact Email
-    "Phone", // Contact Phone
-    "Date Of Birth",
     "Contact Source",
-    "Contact Type",
-    "Opportunity Name",
-    "Your Company Logo (If you don't have one we will make you one)",
-    "Company Phone #",
-    "Your Official Business Name",
-    "Color Scheme Preference For Your Website",
-    "Business Instagram Page Link 📷 (if applicable)",
-    "Business name as you want it to appear on your website:",
-    "Business Facebook Page Link (if applicable)",
-    "Link to your current website (IF YOU HAVE ONE)",
-    "Business name as it will show on your website",
-    "Business Better Business Bureau Page Link (if applicable)",
-    "Your “about us” section (this should be 3-5 sentences about yourself and how you got started with the business (remember we are trying to build a personal brand around you)",
-    "Business Tiktok Page Link (if applicable)",
-    "Do you need us to make you a logo?",
-    "Your Hours of operation (so you don’t get bothered when you want to relax)",
-    "Yelp Business Page Link (if applicable)",
-    "Optional: Discounts you would offer for return customers or friends of past customers (ex $500 off your next roof / 15% off your next driveway wash",
-    "All the services you offer and the price for each service",
-    "Opportunity Row Number",
-    "Give us a few special things about your business that we can show off on your website!",
-    "Your social media links (instagram/facebook) (We will link these on your website so people can find you)",
-    "Your business's hour of operations (ex: EX: 9 am to 5 pm Mon Friday)",
-    "Your Location and the Areas that you service (surrounding cities, suburbs, counties, etc)",
-    "Business Phone # (where you want calls forwarded to)",
-    "As many before and after pictures as you can get me (For now I will just add a gallery section and leave it blank or include whatever photos you have now, we will add to this over time)",
-    "Your Business license # if you have it",
-    "Opportunity Status",
-    "Will you 100% be able to make your appointment? (*assuming a zombie apocalypse doesn't happen*)",
-    "Do You Have a Verified Google My Business Page?",
-    "SMS Optin Date",
-    "SMS Opt-Out Date",
-    "Checkbox 1efu",
-    "Business Name",
-    "Street Address",
-    "City",
-    "Country",
-    "State",
-    "Postal Code",
-    "Website",
-    "Time Zone",
-    "Rate Us"
+    "Contact Type"
   ];
 
   const escape = (val: string | number | undefined | null) => {
@@ -217,62 +170,16 @@ export const exportToCSV = (leads: BusinessLead[]) => {
     return [
       escape(lead.name), // Company Name
       escape(lead.phone), // Phone
-      escape(lead.email), // Email (Updated from "")
+      escape(lead.email), // Email
       escape(lead.website), // Website
       escape(lead.address), // Address
-      escape(state), // State
       escape(city), // City
+      escape(state), // State
       escape(lead.opportunitySummary), // Description
       escape(zip), // Postal Code
       "USA", // Country
-      "", // First Name (Unknown)
-      "", // Last Name (Unknown)
-      escape(lead.email), // Email (Contact)
-      escape(lead.phone), // Phone (Contact - reused)
-      "", // Date Of Birth
       "Local Lead Scraper", // Contact Source
-      "Lead", // Contact Type
-      escape(lead.name), // Opportunity Name
-      "", // Your Company Logo...
-      escape(lead.phone), // Company Phone #
-      escape(lead.name), // Your Official Business Name
-      "", // Color Scheme
-      "", // Instagram
-      escape(lead.name), // Business name as you want it...
-      "", // Facebook
-      escape(lead.website), // Link to current website
-      escape(lead.name), // Business name as it will show
-      "", // BBB
-      "", // About us
-      "", // Tiktok
-      "", // Do you need logo
-      "", // Hours
-      "", // Yelp
-      "", // Discounts
-      escape(lead.category), // Services offered
-      escape(lead.id), // Opportunity Row Number
-      escape(lead.opportunitySummary), // Special things
-      "", // Social media links
-      "", // Business hours
-      escape(`${city}, ${state}`), // Location areas
-      escape(lead.phone), // Business Phone # (forwarding)
-      "", // Before/after pics
-      "", // License
-      "Open", // Opportunity Status
-      "", // Zombie
-      lead.mapsUri ? "Yes" : "No", // Verified GMB
-      "", // SMS Optin
-      "", // SMS Optout
-      "", // Checkbox
-      escape(lead.name), // Business Name (General Info)
-      escape(lead.address), // Street Address
-      escape(city), // City (General Info)
-      "USA", // Country (General Info)
-      escape(state), // State (General Info)
-      escape(zip), // Postal Code (General Info)
-      escape(lead.website), // Website (General Info)
-      "", // Time Zone
-      "" // Rate Us
+      "Lead" // Contact Type
     ];
   });
 
