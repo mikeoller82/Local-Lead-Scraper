@@ -14,7 +14,6 @@ const parseAddressString = (fullAddress: string): { city: string, state: string,
   if (!fullAddress) return { city: "", state: "", zip: "" };
   
   // Regex to look for "City, ST Zip" or "City, ST" at the end of the string
-  // Matches: comma, space, City name (words), comma, space, State (2 chars), space, Zip (5+4 digits)
   const zipMatch = fullAddress.match(/,\s*([a-zA-Z\s\.]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/);
   
   if (zipMatch) {
@@ -25,7 +24,7 @@ const parseAddressString = (fullAddress: string): { city: string, state: string,
     };
   }
 
-  // Fallback for just "City, ST" if zip is missing
+  // Fallback for just "City, ST"
   const stateMatch = fullAddress.match(/,\s*([a-zA-Z\s\.]+),\s*([A-Z]{2})$/);
   if (stateMatch) {
     return {
@@ -44,7 +43,6 @@ const parseAddressString = (fullAddress: string): { city: string, state: string,
 const parseBusinessResponse = (text: string, chunks: any[]): Partial<BusinessLead>[] => {
   try {
     // Attempt to find a JSON block in the text. 
-    // Regex handles ```json followed by optional newline, content, and ```
     const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/\[\s*\{[\s\S]*\}\s*\]/);
     
     if (jsonMatch) {
@@ -62,7 +60,7 @@ const parseBusinessResponse = (text: string, chunks: any[]): Partial<BusinessLea
              email: item.email || "",
              website: item.website,
              rating: item.rating || 0,
-             reviewCount: item.user_ratings_total || item.reviewCount || 0,
+             reviewCount: item.user_ratings_total || item.reviewCount || item.review_count || 0,
              category: item.type || item.category,
              // Explicitly capture these fields if returned
              city: item.city,
@@ -109,39 +107,27 @@ export const searchBusinesses = async (
 
   const ai = new GoogleGenAI({ apiKey });
   
-  onProgress("Accessing Google Maps & Search Indexes...");
+  onProgress("Searching Google Maps...");
 
-  // gemini-2.5-flash is optimized for multi-tool usage and speed
   const modelId = 'gemini-2.5-flash';
   
-  // SOPHISTICATED PROMPT:
-  // 1. Explicitly asks for 20+ results (Maps usually returns 20 per page).
-  // 2. Enforces a fallback: If Maps has no website, use Search.
-  // 3. Stricts JSON output.
+  // REVERTED STRATEGY: Use ONLY Google Maps.
+  // This prevents the model from timing out or getting confused by trying to use Search simultaneously for 20 items.
   const prompt = `
-    Find at least 20 businesses matching "${keyword}" in "${location}".
+    Find 20 businesses matching "${keyword}" in "${location}" using Google Maps.
     
-    EXECUTION STEPS:
-    1. **Primary Source**: Use **Google Maps** to find the list of businesses.
-    2. **Data Enrichment**: 
-       - For EACH business found, you MUST check if a 'website' is listed.
-       - **CRITICAL**: If the Google Maps result does NOT have a website, use **Google Search** to find the official website for that specific business name and city.
-       - Do not leave the website field empty unless you are 100% certain no website exists after searching.
-    3. **Address Accuracy**: Extract the full specific address, including City and Zip Code.
-
-    RETURN FORMAT:
-    Strictly output a JSON array of objects. Do not include markdown code blocks or text outside the JSON.
+    Return a strict JSON array of objects with these fields:
+    - name
+    - address (full address)
+    - phone
+    - website (Extract from Google Maps data)
+    - rating
+    - reviewCount
+    - category
     
+    Format:
     [
-      {
-        "name": "Exact Business Name",
-        "full_address": "123 Street, City, State Zip",
-        "phone": "(555) 123-4567",
-        "website": "https://...",
-        "rating": 4.8,
-        "user_ratings_total": 150,
-        "category": "Plumber"
-      }
+      { "name": "...", "address": "...", "phone": "...", "website": "...", "rating": 4.5, "reviewCount": 100, "category": "..." }
     ]
   `;
 
@@ -150,14 +136,13 @@ export const searchBusinesses = async (
       model: modelId,
       contents: prompt,
       config: {
-        // We provide BOTH tools to allow the model to fallback to Search for missing websites
-        tools: [{ googleMaps: {} }, { googleSearch: {} }],
-        // Slightly higher temperature to allow it to "think" about using Search
-        temperature: 0.7 
+        // STRICTLY ONE TOOL for reliability
+        tools: [{ googleMaps: {} }],
+        temperature: 0.4
       },
     });
 
-    onProgress("Processing intelligence...");
+    onProgress("Processing results...");
 
     const text = response.text || "";
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
@@ -176,12 +161,10 @@ export const searchBusinesses = async (
       );
 
       // Determine address components
-      // PRIORITY 1: Use what the AI extracted into the JSON
       let finalCity = lead.city;
       let finalState = lead.state;
       let finalZip = lead.zip;
 
-      // PRIORITY 2: If JSON is missing specific fields, parse the full_address string
       if ((!finalCity || !finalState) && lead.address) {
         const parsed = parseAddressString(lead.address);
         if (!finalCity && parsed.city) finalCity = parsed.city;
@@ -220,7 +203,6 @@ export const searchBusinesses = async (
     const validatedLeads = await Promise.all(processedLeads.map(async (lead) => {
       if (lead.website) {
         const isReachable = await validateWebsiteUrl(lead.website);
-        // Recalculate score based on reachability
         const updatedLead = { ...lead, isWebsiteReachable: isReachable };
         const { score, summary } = calculateLeadScore(updatedLead);
         const tags = determineTags(updatedLead);
@@ -234,13 +216,12 @@ export const searchBusinesses = async (
   } catch (error: any) {
     handleGeminiError(error);
   }
-  // Unreachable due to handleGeminiError throwing, but needed for TS
   return []; 
 };
 
 /**
- * Performs a "Deep Analysis" by using the AI to infer technical details 
- * based on search grounding about the business's web presence.
+ * Performs a "Deep Analysis" by using the AI to infer technical details.
+ * This is where we use Google Search to find extra data (like email or missing website).
  */
 export const deepQualifyLead = async (apiKey: string, lead: BusinessLead): Promise<Partial<BusinessLead>> => {
   const ai = new GoogleGenAI({ apiKey });
@@ -259,7 +240,7 @@ export const deepQualifyLead = async (apiKey: string, lead: BusinessLead): Promi
     4. SSL Secure: (True/False)
     5. Content Status: (Outdated/Fresh)
     6. Broken Links: (True/False)
-    7. Contact Email: (String) - Search diligently for a public email address (e.g. info@${lead.name.replace(/\s/g,'').toLowerCase()}.com or similar) if not already known.
+    7. Contact Email: (String) - Search diligently for a public email address.
 
     Return JSON only:
     {
@@ -299,9 +280,9 @@ export const deepQualifyLead = async (apiKey: string, lead: BusinessLead): Promi
 
        return {
          ...data,
-         score, // Update score
-         opportunitySummary: summary, // Update summary
-         tags // Update tags
+         score,
+         opportunitySummary: summary,
+         tags
        };
     }
     return {};
@@ -324,37 +305,22 @@ export const generateColdCallScript = async (
   const prompt = `
 Create a highly personalized, non-generic cold call script with the following specifications:
 
-CALLER INFORMATION:
-- Name: ${config.caller.name}
-- Title: ${config.caller.title}
-- Company: ${config.caller.company}
+CALLER: ${config.caller.name}, ${config.caller.title} at ${config.caller.company}
+PROSPECT: ${config.prospect.role} in ${config.prospect.industry} (${config.prospect.companySize})
+PAIN POINT: ${config.valueProp.painPoint}
+SOLUTION: ${config.valueProp.solution}
+OBJECTIVE: ${config.config.objective}
+TONE: ${config.config.tone}
 
-TARGET PROSPECT:
-- Industry: ${config.prospect.industry}
-- Role/Title: ${config.prospect.role}
-- Company Size: ${config.prospect.companySize}
+Generate a complete script with:
+1. Gatekeeper Bypass
+2. Opening (Pattern Interrupt)
+3. Value Pitch
+4. Qualification
+5. Objection Handling
+6. Closing
 
-VALUE PROPOSITION:
-- Main Pain Point: ${config.valueProp.painPoint}
-- Solution Offered: ${config.valueProp.solution}
-- Unique Value: ${config.valueProp.uniqueValue}
-- Social Proof: ${config.valueProp.socialProof}
-
-CALL PARAMETERS:
-- Objective: ${config.config.objective}
-- Tone: ${config.config.tone}
-
-Generate a complete cold call script that includes:
-1. GATEKEEPER BYPASS
-2. OPENING (Permission-based pattern interrupt)
-3. REASON FOR CALL
-4. VALUE STATEMENT
-5. QUALIFYING QUESTIONS
-6. OBJECTION HANDLING
-7. CLOSING/NEXT STEPS
-8. VOICEMAIL SCRIPT
-
-Make it conversational, professional, and persuasive. Use [Brackets] for coaching notes.
+Format with [Coaching Notes].
   `;
 
   try {
@@ -384,10 +350,8 @@ export const createPracticeSession = async (apiKey: string, config: ScriptConfig
         - Busy and slightly skeptical, but professional.
         - You get many cold calls, so you value brevity.
         - If the caller addresses your pain point (${config.valueProp.painPoint}), you become interested.
-        - If the caller sounds robotic, you might hang up or be dismissive.
-        - Keep your responses short (1-2 sentences) to simulate a real phone conversation.
-        - Do not break character. Do not say "I am an AI". Act exactly like the prospect.
-        - Respond naturally to the user's greeting.
+        - Keep responses short (1-2 sentences).
+        - Do not break character.
     `;
 
     const chat = ai.chats.create({
@@ -411,18 +375,16 @@ export const getPracticeFeedback = async (apiKey: string, history: ChatMessage[]
     const transcript = history.map(m => `${m.role.toUpperCase()}: ${m.text}`).join('\n');
 
     const prompt = `
-        Analyze the following cold call transcript between a Salesperson (USER) and a Prospect (MODEL).
+        Analyze the following cold call transcript.
         
         TRANSCRIPT:
         ${transcript}
         
-        Provide constructive feedback on the Salesperson's performance:
-        1. **Strengths**: What did they do well?
-        2. **Weaknesses**: Where did they stumble?
-        3. **Objection Handling**: How well did they handle pushback?
-        4. **Score**: Give a score out of 10.
-        
-        Keep it concise and actionable.
+        Provide feedback on:
+        1. Strengths
+        2. Weaknesses
+        3. Objection Handling
+        4. Score (0-10)
     `;
 
     try {
